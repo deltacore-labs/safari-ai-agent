@@ -678,18 +678,22 @@ async function fetchWebContext(question) {
 }
 
 // ── System Prompt Builder ─────────────────────────────────────
-function buildSystemPrompt(includePageContext = false) {
+function buildSystemPrompt(includePageContext = false, webContext = null) {
   const base = settings.systemPrompt?.trim() ||
     "Du bist ein hilfreicher KI-Assistent.";
 
   const now = new Date();
   const dateStr = now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const withDate = `${base}\n\nAktuelles Datum: ${dateStr}.`;
+  let prompt = `${base}\n\nAktuelles Datum: ${dateStr}.`;
 
-  if (!includePageContext || !currentPageContext || currentPageContext._debugError) return withDate;
+  if (webContext) {
+    prompt += `\n\nAktuelle Informationen aus dem Internet (via Websuche):\n<webcontext>\n${webContext}\n</webcontext>\nNutze diese Informationen bevorzugt gegenüber deinem Trainingswissen.`;
+  }
+
+  if (!includePageContext || !currentPageContext || currentPageContext._debugError) return prompt;
 
   return [
-    withDate,
+    prompt,
     "",
     `Der Nutzer befindet sich auf: ${currentPageContext.title}`,
     `URL: ${currentPageContext.url}`,
