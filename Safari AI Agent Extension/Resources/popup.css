@@ -484,15 +484,22 @@ html, body {
   align-self: center;
   font-size: 11px;
   font-weight: 500;
-  color: var(--color-ink-tertiary);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-hairline-soft);
+  color: var(--color-fin-orange);
+  background: color-mix(in srgb, var(--color-fin-orange) 8%, var(--color-canvas));
+  border: 1px solid color-mix(in srgb, var(--color-fin-orange) 25%, transparent);
   border-radius: var(--radius-pill);
   padding: 3px 10px;
-  margin: 4px 0;
+  margin: 6px auto;
   letter-spacing: 0.1px;
   white-space: nowrap;
-  max-width: 100%;
+  max-width: 90%;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
+}
+
+/* ── Small icon button variant ───────────────────────────────── */
+.icon-btn--xs {
+  width: 24px;
+  height: 24px;
 }

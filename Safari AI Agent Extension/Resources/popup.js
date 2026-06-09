@@ -660,9 +660,26 @@ function onProviderChange() {
 
 async function clearHistory() {
   chatHistory = [];
+  lastDisplayedModel = null;
   await saveHistory([]);
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
+}
+
+async function startNewConversation() {
+  chatHistory = [];
+  lastDisplayedModel = null;
+  await saveHistory([]);
+  document.getElementById("messages").innerHTML = "";
+  renderEmptyState();
+  currentPageContext = null;
+  updatePageToggleUI();
+  fetchPageContent();
+}
+
+function refreshModels() {
+  const providerId = document.getElementById("provider-select").value;
+  populateModelDropdown(providerId);
 }
 
 // ── Init ──────────────────────────────────────────────────────
@@ -691,6 +708,8 @@ async function init() {
   document.getElementById("provider-select").addEventListener("change", onProviderChange);
   document.getElementById("user-input").addEventListener("keydown", onInputKeydown);
   document.getElementById("user-input").addEventListener("input", autoResizeTextarea);
+  document.getElementById("new-chat-btn").addEventListener("click", startNewConversation);
+  document.getElementById("refresh-models-btn").addEventListener("click", refreshModels);
 
   const debouncedRefetchModels = debounce(() => {
     const providerId = document.getElementById("provider-select").value;
