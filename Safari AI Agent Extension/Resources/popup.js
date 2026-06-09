@@ -74,20 +74,68 @@ async function saveHistory(h) {
 }
 
 // ── Settings UI ───────────────────────────────────────────────
-function populateModelDropdown(providerId) {
+async function populateModelDropdown(providerId) {
   const modelSelect = document.getElementById("model-select");
   const modelCustomInput = document.getElementById("model-custom-input");
-  const provider = PROVIDERS[providerId];
-  const isCustom = providerId === "local" || providerId === "hyperspace";
+  const spinner = document.getElementById("model-spinner");
+  const msgEl = document.getElementById("model-fetch-message");
 
-  modelSelect.style.display = isCustom ? "none" : "block";
-  modelCustomInput.style.display = isCustom ? "block" : "none";
+  // Reset message
+  msgEl.style.display = "none";
+  msgEl.className = "model-fetch-message";
+  msgEl.textContent = "";
 
-  if (!isCustom) {
-    modelSelect.innerHTML = provider.models
+  // Static-list providers skip fetch entirely
+  const staticProviders = ["anthropic", "gemini"];
+  if (staticProviders.includes(providerId)) {
+    modelSelect.style.display = "block";
+    modelCustomInput.style.display = "none";
+    modelSelect.disabled = false;
+    const staticModels = PROVIDERS[providerId].models;
+    modelSelect.innerHTML = staticModels
       .map(m => `<option value="${m}">${m}</option>`)
       .join("");
+    if ([...modelSelect.options].some(o => o.value === settings.model)) {
+      modelSelect.value = settings.model;
+    }
+    return;
   }
+
+  // Show loading state
+  modelSelect.style.display = "block";
+  modelCustomInput.style.display = "none";
+  modelSelect.disabled = true;
+  modelSelect.innerHTML = `<option value="">Modelle werden geladen…</option>`;
+  spinner.style.display = "inline-block";
+
+  const result = await fetchModelsForProvider(providerId);
+
+  spinner.style.display = "none";
+  modelSelect.disabled = false;
+
+  if (result === null) return;
+
+  if (Array.isArray(result)) {
+    modelSelect.innerHTML = result
+      .map(m => `<option value="${m}">${m}</option>`)
+      .join("");
+    if ([...modelSelect.options].some(o => o.value === settings.model)) {
+      modelSelect.value = settings.model;
+    }
+    return;
+  }
+
+  // result is { error } or { hint }
+  modelSelect.innerHTML = "";
+  modelSelect.disabled = true;
+  if (result.error) {
+    msgEl.className = "model-fetch-message error";
+    msgEl.textContent = result.error;
+  } else {
+    msgEl.className = "model-fetch-message hint";
+    msgEl.textContent = result.hint;
+  }
+  msgEl.style.display = "block";
 }
 
 function updateBaseUrlVisibility(providerId) {
