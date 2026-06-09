@@ -38,10 +38,10 @@ const PROVIDERS = {
 };
 
 const DEFAULT_SETTINGS = {
-  provider: "anthropic",
+  provider: "hyperspace",
   apiKey: "",
-  baseUrl: "",
-  model: "claude-sonnet-4-6",
+  baseUrl: "http://localhost:6655/litellm/v1",
+  model: "",
   customModel: "",
   systemPrompt: ""
 };
