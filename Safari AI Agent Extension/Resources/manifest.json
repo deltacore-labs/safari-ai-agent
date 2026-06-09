@@ -19,9 +19,6 @@
     "storage"
   ],
   "host_permissions": [
-    "https://api.openai.com/*",
-    "https://api.anthropic.com/*",
-    "https://generativelanguage.googleapis.com/*",
     "*://*/*"
   ],
   "action": {
@@ -32,5 +29,9 @@
       "32": "images/toolbar-icon-32.png",
       "38": "images/toolbar-icon-38.png"
     }
+  },
+  "icons": {
+    "48": "images/toolbar-icon-48.png",
+    "128": "images/toolbar-icon-128.png"
   }
 }
