@@ -333,6 +333,12 @@ function markdownToHtml(text) {
   // Italic
   escaped = escaped.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
 
+  // Headings
+  escaped = escaped.replace(/^(#{1,6})\s+(.+)$/gm, (_, hashes, content) => {
+    const level = hashes.length;
+    return `<h${level}>${content}</h${level}>`;
+  });
+
   // Links — sanitize href, fall back to plain text on dangerous schemes
   escaped = escaped.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
@@ -639,15 +645,26 @@ async function shouldIncludePageContext(text) {
   return await classifyWithAI(text);
 }
 
+// ── Uncertainty Detection ─────────────────────────────────────
+const UNCERTAINTY_RE = /nach meinem (trainingsstand|wissensstand)|ich wei[sß] (es )?nicht|kann ich nicht bestätigen|nicht (ganz |völlig )?sicher|mein wissen reicht bis|ich habe keinen zugriff|kann ich nicht mit sicherheit|as of my (knowledge|training)|i (don't|do not|cannot|can't) (know|confirm|access|verify)|my (knowledge|training) (cutoff|ends|is limited)|i'?m not (sure|certain)|i have no (access|information)/i;
+
+function uncertaintyCheck(text) {
+  return UNCERTAINTY_RE.test(text);
+}
+
 // ── System Prompt Builder ─────────────────────────────────────
 function buildSystemPrompt(includePageContext = false) {
   const base = settings.systemPrompt?.trim() ||
     "Du bist ein hilfreicher KI-Assistent.";
 
-  if (!includePageContext || !currentPageContext || currentPageContext._debugError) return base;
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const withDate = `${base}\n\nAktuelles Datum: ${dateStr}.`;
+
+  if (!includePageContext || !currentPageContext || currentPageContext._debugError) return withDate;
 
   return [
-    base,
+    withDate,
     "",
     `Der Nutzer befindet sich auf: ${currentPageContext.title}`,
     `URL: ${currentPageContext.url}`,
