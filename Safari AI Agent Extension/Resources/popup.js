@@ -30,7 +30,7 @@ const PROVIDERS = {
   },
   hyperspace: {
     name: "Hyperspace",
-    baseUrl: null,
+    baseUrl: "http://localhost:6655/litellm/v1",
     models: [],
     streaming: true,
     format: "openai"
@@ -147,7 +147,8 @@ function updateBaseUrlVisibility(providerId) {
 function loadSettingsIntoUI() {
   document.getElementById("provider-select").value = settings.provider;
   document.getElementById("api-key-input").value = settings.apiKey;
-  document.getElementById("base-url-input").value = settings.baseUrl;
+  const defaultBaseUrl = PROVIDERS[settings.provider]?.baseUrl ?? "";
+  document.getElementById("base-url-input").value = settings.baseUrl || defaultBaseUrl;
   document.getElementById("system-prompt-input").value = settings.systemPrompt;
   updateBaseUrlVisibility(settings.provider);
   populateModelDropdown(settings.provider);  // async, fire-and-forget — handles model restore internally
@@ -607,6 +608,10 @@ function toggleKeyVisibility() {
 function onProviderChange() {
   const providerId = document.getElementById("provider-select").value;
   updateBaseUrlVisibility(providerId);
+  const baseUrlInput = document.getElementById("base-url-input");
+  if (!baseUrlInput.value.trim()) {
+    baseUrlInput.value = PROVIDERS[providerId]?.baseUrl ?? "";
+  }
   populateModelDropdown(providerId);
 }
 
