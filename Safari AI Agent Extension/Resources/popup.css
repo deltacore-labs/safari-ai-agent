@@ -485,10 +485,10 @@ html, body {
   font-size: 11px;
   font-weight: 500;
   color: var(--color-fin-orange);
-  background: color-mix(in srgb, var(--color-fin-orange) 8%, var(--color-canvas));
-  border: 1px solid color-mix(in srgb, var(--color-fin-orange) 25%, transparent);
+  background: #fff4ef;
+  border: 1px solid #ffd5c2;
   border-radius: var(--radius-pill);
-  padding: 3px 10px;
+  padding: 4px 12px;
   margin: 6px auto;
   letter-spacing: 0.1px;
   white-space: nowrap;
@@ -496,6 +496,7 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  display: block;
 }
 
 /* ── Small icon button variant ───────────────────────────────── */

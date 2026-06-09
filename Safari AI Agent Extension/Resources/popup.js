@@ -692,20 +692,22 @@ function onProviderChange() {
 async function clearHistory() {
   chatHistory = [];
   lastDisplayedModel = null;
-  await saveHistory([]);
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
+  try { await browser.storage.local.remove("chatHistory"); } catch { /* ignore */ }
 }
 
 async function startNewConversation() {
+  // Reset UI first — don't wait for storage
   chatHistory = [];
   lastDisplayedModel = null;
-  await saveHistory([]);
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
   currentPageContext = null;
   updatePageToggleUI();
   fetchPageContent();
+  // Clear storage — best effort
+  try { await browser.storage.local.remove("chatHistory"); } catch { /* ignore */ }
 }
 
 function refreshModels() {
