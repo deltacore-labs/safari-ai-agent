@@ -548,6 +548,8 @@ async function classifyWithAI(text) {
   const providerId = settings.provider;
   const model = providerId === "local" ? settings.customModel : settings.model;
   if (!model) return false;
+  if (!settings.apiKey && providerId !== "local") return false;
+  if ((providerId === "local" || providerId === "hyperspace") && !settings.baseUrl) return false;
 
   const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
   const userMsg = `Bezieht sich diese Frage auf den Inhalt einer bestimmten Webseite, die der Nutzer gerade geöffnet hat? Frage: ${text}`;
@@ -975,7 +977,8 @@ function refreshModels() {
 async function init() {
   settings = await loadSettings();
   const stored = await browser.storage.local.get(["pageContextMode"]);
-  pageContextMode = stored.pageContextMode ?? "auto";
+  const validModes = ["auto", "on", "off"];
+  pageContextMode = validModes.includes(stored.pageContextMode) ? stored.pageContextMode : "auto";
   updatePageCtrlUI();
   chatHistory = await loadHistory();
   applyTheme(settings.provider, settings.model);
