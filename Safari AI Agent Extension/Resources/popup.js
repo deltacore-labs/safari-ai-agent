@@ -610,7 +610,9 @@ async function sendMessage() {
   const currentModel = settings.model || settings.customModel || "?";
   if (currentModel !== lastDisplayedModel) {
     const providerName = PROVIDERS[settings.provider]?.name ?? settings.provider;
-    renderModelTag(`${providerName} · ${currentModel}`);
+    // Strip vendor prefixes like "anthropic--" or "openai/" for readability
+    const displayModel = currentModel.replace(/^[a-z]+--/i, "").replace(/^[a-z]+\//i, "");
+    renderModelTag(`${providerName} · ${displayModel}`);
     lastDisplayedModel = currentModel;
   }
 
