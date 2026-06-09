@@ -51,7 +51,7 @@ let settings = { ...DEFAULT_SETTINGS };
 let chatHistory = [];
 let isStreaming = false;
 let currentPageContext = null;
-let pageToggleEnabled = true;
+let pageContextMode = "auto"; // "auto" | "on" | "off"
 let lastDisplayedModel = null;
 
 // ── Storage Helpers ───────────────────────────────────────────
@@ -67,11 +67,18 @@ async function saveSettings(s) {
 async function loadHistory() {
   const result = await browser.storage.local.get(["chatHistory"]);
   const history = Array.isArray(result.chatHistory) ? result.chatHistory : [];
-  // Truncate each message content to 10k chars to prevent runaway storage
-  return history.map(m => ({
-    ...m,
-    content: m.content.length > 10000 ? m.content.slice(0, 10000) + "…" : m.content
-  }));
+  // Coerce content to string + cap at 10k chars. Old/corrupt entries
+  // (undefined, numbers, objects from earlier schemas) become empty strings
+  // rather than throwing on .length / .slice.
+  return history
+    .filter(m => m && (m.role === "user" || m.role === "assistant"))
+    .map(m => {
+      const content = typeof m.content === "string" ? m.content : String(m.content ?? "");
+      return {
+        ...m,
+        content: content.length > 10000 ? content.slice(0, 10000) + "…" : content
+      };
+    });
 }
 
 async function saveHistory(h) {
@@ -126,9 +133,19 @@ async function populateModelDropdown(providerId) {
     return;
   }
 
+  // For "local", always make the custom input available — local servers
+  // (older Ollama, llama.cpp, …) frequently lack a /v1/models endpoint,
+  // and the user must be able to type a model name regardless.
+  const isCustom = providerId === "local";
+  if (isCustom) {
+    modelCustomInput.style.display = "block";
+    modelCustomInput.value = settings.customModel || "";
+  } else {
+    modelCustomInput.style.display = "none";
+  }
+
   // Show loading state
   modelSelect.style.display = "block";
-  modelCustomInput.style.display = "none";
   modelSelect.disabled = true;
   modelSelect.innerHTML = `<option value="">Modelle werden geladen…</option>`;
   spinner.style.display = "inline-block";
@@ -173,15 +190,10 @@ function loadSettingsIntoUI() {
   document.getElementById("provider-select").value = settings.provider;
   document.getElementById("api-key-input").value = settings.apiKey;
   const defaultBaseUrl = PROVIDERS[settings.provider]?.baseUrl ?? "";
-  document.getElementById("base-url-input").value = settings.baseUrl || defaultBaseUrl;
+  document.getElementById("base-url-input").value = settings.provider === "hyperspace" ? defaultBaseUrl : (settings.baseUrl || defaultBaseUrl);
   document.getElementById("system-prompt-input").value = settings.systemPrompt;
   updateBaseUrlVisibility(settings.provider);
-  populateModelDropdown(settings.provider);  // async, fire-and-forget — handles model restore internally
-
-  const isCustom = settings.provider === "local";
-  if (isCustom) {
-    document.getElementById("model-custom-input").value = settings.customModel;
-  }
+  populateModelDropdown(settings.provider);  // async, fire-and-forget — handles model + custom input restore internally
 }
 
 async function saveSettingsFromUI() {
@@ -284,16 +296,27 @@ async function fetchModelsForProvider(providerId) {
 }
 
 // ── Markdown Renderer ─────────────────────────────────────────
+// Only http(s), mailto, and relative/anchor URLs may render as links.
+// Everything else (javascript:, data:, vbscript:, file:, …) becomes plain
+// text so LLM-emitted markdown cannot run code in the extension context.
+function sanitizeUrl(href) {
+  const trimmed = String(href).trim();
+  if (/^(https?:|mailto:)/i.test(trimmed)) return trimmed;
+  if (/^[\/#?]/.test(trimmed)) return trimmed;
+  return null;
+}
+
 function markdownToHtml(text) {
-  let escaped = text
+  let escaped = String(text ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Code blocks (must come before inline code)
-  escaped = escaped.replace(/```[\w]*\n?([\s\S]*?)```/g, (_, code) =>
-    `<pre><code>${code.trim()}</code></pre>`
-  );
+  // Code blocks (must come before inline code) — preserve language as class
+  escaped = escaped.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    const langClass = lang ? ` class="language-${lang}"` : "";
+    return `<pre><code${langClass}>${code.trim()}</code></pre>`;
+  });
 
   // Inline code
   escaped = escaped.replace(/`([^`\n]+)`/g, "<code>$1</code>");
@@ -304,26 +327,35 @@ function markdownToHtml(text) {
   // Italic
   escaped = escaped.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
 
-  // Links
+  // Links — sanitize href, fall back to plain text on dangerous schemes
   escaped = escaped.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    (_, label, href) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
+    (_, label, href) => {
+      const safe = sanitizeUrl(href);
+      if (!safe) return label;
+      const safeAttr = safe.replace(/"/g, "&quot;");
+      return `<a href="${safeAttr}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    }
   );
 
-  // Unordered lists
-  escaped = escaped.replace(/((?:^|- .+\n?)+)/gm, (block) => {
-    const lines = block.split("\n").filter(l => /^- .+/.test(l));
-    if (lines.length === 0) return block;
-    const items = lines.map(l => `<li>${l.replace(/^- /, "")}</li>`).join("");
-    return `<ul>${items}</ul>`;
+  // Unordered lists — collapse consecutive `- item` lines into a <ul>
+  escaped = escaped.replace(/(?:^|\n)((?:- .+(?:\n|$))+)/g, (_, block) => {
+    const items = block
+      .split("\n")
+      .filter(l => /^- .+/.test(l))
+      .map(l => `<li>${l.replace(/^- /, "")}</li>`)
+      .join("");
+    return `\n<ul>${items}</ul>`;
   });
 
   // Paragraphs
   escaped = escaped
     .split(/\n{2,}/)
     .map(chunk => {
-      if (chunk.startsWith("<pre") || chunk.startsWith("<ul")) return chunk;
-      return `<p>${chunk.replace(/\n/g, "<br>")}</p>`;
+      const trimmed = chunk.trim();
+      if (!trimmed) return "";
+      if (trimmed.startsWith("<pre") || trimmed.startsWith("<ul")) return trimmed;
+      return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
     })
     .join("");
 
@@ -430,10 +462,28 @@ function renderMessage(role, content) {
   if (role === "user") {
     bubble.textContent = content;
   } else {
+    bubble._rawText = content;
     bubble.innerHTML = markdownToHtml(content);
   }
 
   row.appendChild(bubble);
+
+  if (role === "ai") {
+    const copyBtn = document.createElement("button");
+    copyBtn.className = "copy-btn";
+    copyBtn.title = "Kopieren";
+    copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(bubble._rawText ?? bubble.textContent).then(() => {
+        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        setTimeout(() => {
+          copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
+        }, 1500);
+      });
+    });
+    bubble.appendChild(copyBtn);
+  }
+
   document.getElementById("messages").appendChild(row);
   scrollToBottom();
   return bubble;
@@ -452,35 +502,33 @@ function renderEmptyState() {
 }
 
 // ── Page Content Fetch ────────────────────────────────────────
-function updatePageToggleUI() {
-  const btn = document.getElementById("page-toggle-btn");
-  if (!btn) return;
-  const loaded = currentPageContext !== null;
-  const active = pageToggleEnabled && loaded;
-  btn.classList.toggle("active", active);
-  if (!pageToggleEnabled) {
-    btn.title = "Seite einbeziehen (deaktiviert)";
-  } else if (loaded) {
-    btn.title = `Seite einbeziehen: ${currentPageContext.title || currentPageContext.url}`;
-  } else {
-    btn.title = "Seite wird geladen…";
-  }
-}
-
 async function fetchPageContent() {
   try {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-    if (!tabs || tabs.length === 0) { currentPageContext = null; updatePageToggleUI(); return; }
-    const response = await browser.tabs.sendMessage(tabs[0].id, { action: "EXTRACT_DOM" });
-    if (response && !response.error) {
-      currentPageContext = response;
+    if (!tabs || tabs.length === 0) { currentPageContext = null; return; }
+    const tab = tabs[0];
+
+    const results = await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        const rawText = document.body?.innerText ?? "";
+        return {
+          text: rawText.length > 50000 ? rawText.slice(0, 50000) + "\n...[truncated]" : rawText,
+          title: document.title,
+          url: window.location.href
+        };
+      }
+    });
+
+    const data = results?.[0]?.result;
+    if (data && data.text) {
+      currentPageContext = data;
     } else {
       currentPageContext = null;
     }
-  } catch {
-    currentPageContext = null;
+  } catch (err) {
+    currentPageContext = { _debugError: `${err?.name}: ${err?.message}` };
   }
-  updatePageToggleUI();
 }
 
 // ── System Prompt Builder ─────────────────────────────────────
@@ -488,7 +536,13 @@ function buildSystemPrompt() {
   const base = settings.systemPrompt?.trim() ||
     "Du bist ein hilfreicher KI-Assistent.";
 
-  if (!pageToggleEnabled || !currentPageContext) return base;
+  if (!currentPageContext) return base;
+
+  if (currentPageContext._debugError) {
+    return base + "\n\n[DEBUG Seiteninhalt-Fehler]: " + currentPageContext._debugError;
+  }
+
+  if (pageContextMode === "off") return base;
 
   return [
     base,
@@ -509,7 +563,8 @@ async function* parseSSE(response) {
     const { done, value } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
+    // SSE allows \n, \r, or \r\n line endings
+    const lines = buffer.split(/\r\n|\r|\n/);
     buffer = lines.pop() ?? "";
     for (const line of lines) {
       if (line.startsWith("data: ")) yield line.slice(6).trim();
@@ -528,12 +583,14 @@ async function* streamOpenAI(messages) {
     ? settings.customModel
     : settings.model;
 
+  const headers = { "Content-Type": "application/json" };
+  // Only attach Authorization when a key is actually present — some local
+  // servers (LiteLLM/nginx proxies) reject `Bearer ` with an empty token.
+  if (settings.apiKey) headers["Authorization"] = `Bearer ${settings.apiKey}`;
+
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${settings.apiKey}`
-    },
+    headers,
     body: JSON.stringify({ model, messages, stream: true, max_tokens: 2048 })
   });
 
@@ -553,9 +610,28 @@ async function* streamOpenAI(messages) {
 }
 
 // ── Anthropic Streaming ───────────────────────────────────────
+// Anthropic requires strictly alternating user/assistant messages and the
+// first non-system message must be `user`. Merge consecutive same-role
+// messages and drop a leading assistant message if present.
+function normalizeAnthropicMessages(messages) {
+  const filtered = messages.filter(m => m.role !== "system");
+  // Drop leading assistant message(s) — API rejects them as the first turn
+  while (filtered.length > 0 && filtered[0].role === "assistant") filtered.shift();
+  const merged = [];
+  for (const m of filtered) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === m.role) {
+      last.content = `${last.content}\n\n${m.content}`;
+    } else {
+      merged.push({ role: m.role, content: m.content });
+    }
+  }
+  return merged;
+}
+
 async function* streamAnthropic(messages) {
   const systemPrompt = buildSystemPrompt();
-  const userMessages = messages.filter(m => m.role !== "system");
+  const userMessages = normalizeAnthropicMessages(messages);
 
   const response = await fetch(PROVIDERS.anthropic.baseUrl, {
     method: "POST",
@@ -671,9 +747,10 @@ async function sendMessage() {
   // Guard: no API key
   if (!settings.apiKey && settings.provider !== "local") {
     typingEl.classList.add("hidden");
+    typingEl.setAttribute("aria-hidden", "true");
     renderMessage("ai", "Bitte zuerst einen API-Key in den Einstellungen hinterlegen.");
     isStreaming = false;
-    document.getElementById("send-btn").disabled = false;
+    document.getElementById("send-btn").disabled = input.value.trim().length === 0;
     return;
   }
 
@@ -711,6 +788,7 @@ async function sendMessage() {
         }
         fullResponse += token;
         aiBubble.innerHTML = markdownToHtml(fullResponse);
+        aiBubble._rawText = fullResponse;
         scrollToBottomIfNear();
       }
     }
@@ -723,7 +801,9 @@ async function sendMessage() {
     renderMessage("ai", `Fehler: ${err.message}`);
   } finally {
     isStreaming = false;
-    document.getElementById("send-btn").disabled = false;
+    // Re-enable only if there's something to send — input is empty after a
+    // successful send, so leaving it disabled until the user types is correct.
+    document.getElementById("send-btn").disabled = input.value.trim().length === 0;
     input.focus();
   }
 }
@@ -738,18 +818,6 @@ function openSettings() {
 function closeSettings() {
   document.getElementById("settings-panel").classList.remove("active");
   document.getElementById("chat-panel").classList.remove("slide-left");
-}
-
-// ── Page Toggle ───────────────────────────────────────────────
-async function togglePageContext() {
-  if (!currentPageContext) {
-    // No content yet — try to fetch now
-    await fetchPageContent();
-    if (currentPageContext) pageToggleEnabled = true;
-  } else {
-    pageToggleEnabled = !pageToggleEnabled;
-  }
-  updatePageToggleUI();
 }
 
 // ── Event Handlers ────────────────────────────────────────────
@@ -776,8 +844,9 @@ function onProviderChange() {
   const providerId = document.getElementById("provider-select").value;
   updateBaseUrlVisibility(providerId);
   const baseUrlInput = document.getElementById("base-url-input");
-  if (!baseUrlInput.value.trim()) {
-    baseUrlInput.value = PROVIDERS[providerId]?.baseUrl ?? "";
+  const defaultUrl = PROVIDERS[providerId]?.baseUrl ?? "";
+  if (providerId === "hyperspace" || !baseUrlInput.value.trim()) {
+    baseUrlInput.value = defaultUrl;
   }
   applyTheme(providerId, "");
   populateModelDropdown(providerId);
@@ -798,7 +867,6 @@ async function startNewConversation() {
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
   currentPageContext = null;
-  updatePageToggleUI();
   fetchPageContent();
   // Clear storage — best effort
   try { await browser.storage.local.remove("chatHistory"); } catch { /* ignore */ }
@@ -812,6 +880,8 @@ function refreshModels() {
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   settings = await loadSettings();
+  const stored = await browser.storage.local.get(["pageContextMode"]);
+  pageContextMode = stored.pageContextMode ?? "auto";
   chatHistory = await loadHistory();
   applyTheme(settings.provider, settings.model);
 
@@ -823,7 +893,6 @@ async function init() {
     );
   }
 
-  updatePageToggleUI();
   fetchPageContent();
 
   document.getElementById("send-btn").addEventListener("click", sendMessage);
@@ -832,7 +901,6 @@ async function init() {
   document.getElementById("save-settings-btn").addEventListener("click", saveSettingsFromUI);
   document.getElementById("clear-history-btn").addEventListener("click", clearHistory);
   document.getElementById("toggle-key-btn").addEventListener("click", toggleKeyVisibility);
-  document.getElementById("page-toggle-btn").addEventListener("click", togglePageContext);
   document.getElementById("provider-select").addEventListener("change", onProviderChange);
   document.getElementById("user-input").addEventListener("keydown", onInputKeydown);
   document.getElementById("user-input").addEventListener("input", autoResizeTextarea);
