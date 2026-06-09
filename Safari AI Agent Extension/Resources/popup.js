@@ -31,7 +31,19 @@ const PROVIDERS = {
   hyperspace: {
     name: "Hyperspace",
     baseUrl: "http://localhost:6655/litellm/v1",
-    models: [],
+    models: [
+      "anthropic--claude-sonnet-latest",
+      "anthropic--claude-opus-latest",
+      "anthropic--claude-haiku-latest",
+      "anthropic--claude-4.6-sonnet",
+      "anthropic--claude-4.7-opus",
+      "anthropic--claude-4.5-haiku",
+      "gpt-5",
+      "gpt-4.1",
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "sonar-pro"
+    ],
     streaming: true,
     format: "openai"
   }
@@ -126,6 +138,19 @@ async function populateModelDropdown(providerId) {
   }
 
   // result is { error } or { hint }
+  // For hyperspace: fall back to static model list on error (proxy might not be running yet)
+  if (result.error && providerId === "hyperspace" && PROVIDERS.hyperspace.models.length) {
+    const fallback = PROVIDERS.hyperspace.models;
+    modelSelect.innerHTML = fallback.map(m => `<option value="${m}">${m}</option>`).join("");
+    modelSelect.disabled = false;
+    if ([...modelSelect.options].some(o => o.value === settings.model)) {
+      modelSelect.value = settings.model;
+    }
+    msgEl.className = "model-fetch-message hint";
+    msgEl.textContent = "Proxy nicht erreichbar — bekannte Modelle geladen";
+    msgEl.style.display = "block";
+    return;
+  }
   modelSelect.innerHTML = "";
   modelSelect.disabled = true;
   if (result.error) {
@@ -224,7 +249,11 @@ async function fetchModelsForProvider(providerId) {
     if (res.status === 404) return { error: "Base URL nicht gefunden" };
     if (!res.ok) return { error: `Fehler ${res.status}` };
     const json = await res.json();
-    const models = (json.data ?? []).map(m => m.id).filter(Boolean).sort();
+    const EMBEDDING_KEYWORDS = ["embedding", "embed", "search", "similarity"];
+    const models = (json.data ?? [])
+      .map(m => m.id)
+      .filter(id => id && !EMBEDDING_KEYWORDS.some(k => id.toLowerCase().includes(k)))
+      .sort();
     return models.length ? models : { error: "Keine Modelle gefunden" };
   } catch {
     return { error: "Modelle konnten nicht geladen werden" };
