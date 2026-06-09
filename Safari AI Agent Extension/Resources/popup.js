@@ -325,27 +325,27 @@ function getProviderAvatar() {
   const AVATARS = {
     anthropic: {
       bg: "#cc785c",
-      svg: `<svg width="13" height="13" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><g transform="translate(12,12)" fill="white"><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(0)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(30)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(60)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(90)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(120)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(150)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(180)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(210)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(240)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(270)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(300)"/><rect x="-2" y="-10" width="4" height="7" rx="2" transform="rotate(330)"/></g></svg>`
+      img: null  // placeholder until logo-anthropic.png is added
     },
     openai: {
       bg: "#000000",
-      svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.843-3.387 2.02-1.168a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.402-.663zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z"/></svg>`
+      img: "images/logo-openai.png"
     },
     gemini: {
-      bg: "linear-gradient(135deg, #ea4335 0%, #4285f4 45%, #34a853 80%, #fbbc04 100%)",
-      svg: `<svg width="13" height="13" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C11.5 7.5 16.5 12.5 22 12C16.5 11.5 11.5 16.5 12 22C12.5 16.5 7.5 11.5 2 12C7.5 12.5 12.5 7.5 12 2Z" fill="white"/></svg>`
+      bg: "#ffffff",
+      img: "images/logo-gemini.png"
     },
     perplexity: {
       bg: "#20808d",
-      svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg"><path d="M22 12L12 2 2 12h4v8h4v-4h4v4h4v-8z"/></svg>`
+      img: null
     },
     hyperspace: {
       bg: "#0070f3",
-      svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="3" fill="white"/><path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2a8 8 0 0 1 8 8 8 8 0 0 1-8 8 8 8 0 0 1-8-8 8 8 0 0 1 8-8z" fill="white" opacity="0.5"/><path d="M2 12h20M12 2v20" stroke="white" stroke-width="1.5" opacity="0.3"/></svg>`
+      img: null
     },
     local: {
       bg: "#6e6e6e",
-      svg: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="2" y="3" width="20" height="14" rx="2" stroke="white" stroke-width="1.8"/><path d="M8 21h8M12 17v4" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>`
+      img: null
     }
   };
 
@@ -388,9 +388,17 @@ function renderMessage(role, content) {
   if (role === "ai") {
     const avatar = document.createElement("div");
     avatar.className = "ai-avatar";
-    const { bg, svg } = getProviderAvatar();
+    const { bg, img } = getProviderAvatar();
     avatar.style.background = bg;
-    avatar.innerHTML = svg;
+    if (img) {
+      const imgEl = document.createElement("img");
+      imgEl.src = img;
+      imgEl.width = 16;
+      imgEl.height = 16;
+      imgEl.style.objectFit = "contain";
+      imgEl.style.borderRadius = "2px";
+      avatar.appendChild(imgEl);
+    }
     row.appendChild(avatar);
   }
 
@@ -621,8 +629,18 @@ async function sendMessage() {
 
   const typingEl = document.getElementById("typing-indicator");
   const typingAvatar = typingEl.querySelector(".ai-avatar");
-  const { bg, svg } = getProviderAvatar();
-  if (typingAvatar) { typingAvatar.style.background = bg; typingAvatar.innerHTML = svg; }
+  const { bg, img } = getProviderAvatar();
+  if (typingAvatar) {
+    typingAvatar.style.background = bg;
+    typingAvatar.innerHTML = "";
+    if (img) {
+      const imgEl = document.createElement("img");
+      imgEl.src = img;
+      imgEl.width = 16; imgEl.height = 16;
+      imgEl.style.cssText = "object-fit:contain;border-radius:2px";
+      typingAvatar.appendChild(imgEl);
+    }
+  }
   typingEl.classList.remove("hidden");
   scrollToBottom();
 
