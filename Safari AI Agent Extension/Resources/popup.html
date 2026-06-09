@@ -1,11 +1,153 @@
 <!DOCTYPE html>
-<html>
+<html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <link rel="stylesheet" href="popup.css">
-    <script type="module" src="popup.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=380">
+  <title>AI Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <strong>Hello World!</strong>
+  <div id="app">
+
+    <!-- PANEL 1: Chat -->
+    <div id="chat-panel" class="panel active">
+      <header class="panel-header">
+        <span class="header-title">AI Agent</span>
+        <div class="header-actions">
+          <button id="page-toggle-btn" class="toggle-btn active" aria-label="Toggle page context" title="Seite einbeziehen">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/>
+              <line x1="4" y1="5" x2="12" y2="5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="4" y1="8" x2="10" y2="8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="4" y1="11" x2="8" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button id="settings-btn" class="icon-btn" aria-label="Settings">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M2.93 2.93l1.06 1.06M12.01 12.01l1.06 1.06M2.93 13.07l1.06-1.06M12.01 3.99l1.06-1.06" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="messages" class="messages-list" role="log" aria-live="polite">
+        <div id="empty-state" class="empty-state">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16 3C8.82 3 3 8.82 3 16c0 2.28.58 4.42 1.6 6.28L3 29l6.72-1.6A13 13 0 1016 3z" stroke="#d3cec6" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          <p>Stelle mir eine Frage zu dieser Seite oder irgendeinem anderen Thema.</p>
+        </div>
+      </div>
+
+      <div id="typing-indicator" class="typing-indicator hidden" aria-hidden="true">
+        <div class="ai-avatar">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="white" xmlns="http://www.w3.org/2000/svg">
+            <path d="M8 1l1.8 3.6L14 5.5l-3 2.9.7 4.1L8 10.5l-3.7 2 .7-4.1-3-2.9 4.2-.9z"/>
+          </svg>
+        </div>
+        <div class="typing-dots">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <textarea
+          id="user-input"
+          placeholder="Frage stellen…"
+          rows="1"
+          maxlength="4000"
+          aria-label="Nachricht eingeben"
+        ></textarea>
+        <button id="send-btn" class="send-btn" aria-label="Senden" disabled>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 8h12M9 3l5 5-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- PANEL 2: Settings -->
+    <div id="settings-panel" class="panel">
+      <header class="panel-header">
+        <button id="back-btn" class="icon-btn" aria-label="Zurück">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <span class="header-title">Einstellungen</span>
+        <div style="width:36px"></div>
+      </header>
+
+      <div class="settings-scroll">
+
+        <section class="settings-section">
+          <label class="settings-label" for="provider-select">KI-Anbieter</label>
+          <select id="provider-select" class="settings-select">
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="local">Lokal (Ollama / LM Studio)</option>
+            <option value="hyperspace">Hyperspace</option>
+          </select>
+        </section>
+
+        <section class="settings-section" id="base-url-section" style="display:none">
+          <label class="settings-label" for="base-url-input">Base URL</label>
+          <input type="url" id="base-url-input" class="settings-input"
+                 placeholder="http://localhost:11434/v1">
+        </section>
+
+        <section class="settings-section">
+          <label class="settings-label" for="api-key-input">API-Key</label>
+          <div class="input-with-toggle">
+            <input type="password" id="api-key-input" class="settings-input"
+                   placeholder="sk-…" autocomplete="off" spellcheck="false">
+            <button class="visibility-btn" id="toggle-key-btn" aria-label="API-Key anzeigen/verbergen" type="button">
+              <svg id="eye-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 8s2.5-5 7-5 7 5 7 5-2.5 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.5"/>
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/>
+              </svg>
+            </button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <label class="settings-label" for="model-select">Modell</label>
+          <select id="model-select" class="settings-select"></select>
+          <input type="text" id="model-custom-input" class="settings-input" style="margin-top:8px;display:none"
+                 placeholder="Modellname, z.B. llama3">
+        </section>
+
+        <section class="settings-section">
+          <label class="settings-label" for="system-prompt-input">
+            System Prompt <span class="label-optional">(optional)</span>
+          </label>
+          <textarea id="system-prompt-input" class="settings-textarea" rows="3"
+                    placeholder="Du bist ein hilfreicher KI-Assistent…"></textarea>
+        </section>
+
+        <section class="settings-section settings-section--danger">
+          <button id="clear-history-btn" class="btn-secondary btn--full" type="button">
+            Verlauf löschen
+          </button>
+        </section>
+
+      </div>
+
+      <div class="settings-footer">
+        <button id="save-settings-btn" class="btn-fin btn--full" type="button">
+          Einstellungen speichern
+        </button>
+      </div>
+    </div>
+
+  </div>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>
