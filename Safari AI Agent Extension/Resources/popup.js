@@ -654,6 +654,7 @@ function uncertaintyCheck(text) {
 
 // ── Web Context Fetch (Perplexity via Hyperspace) ─────────────
 async function fetchWebContext(question) {
+  if (settings.provider !== "hyperspace" && settings.provider !== "local") return null;
   if (!settings.baseUrl) return null;
   const url = settings.baseUrl.replace(/\/$/, "") + "/chat/completions";
   try {
@@ -947,6 +948,7 @@ async function sendMessage() {
       }
     }
 
+    const historyBeforeFirstReply = [...chatHistory]; // snapshot before first reply
     chatHistory.push({ role: "assistant", content: fullResponse });
     await saveHistory(chatHistory);
 
@@ -966,11 +968,11 @@ async function sendMessage() {
         let webMessages;
         const webSystemPrompt = buildSystemPrompt(includeCtx, webContext);
         if (providerId === "anthropic" || providerId === "gemini") {
-          webMessages = chatHistory.map(m => ({ role: m.role, content: m.content }));
+          webMessages = historyBeforeFirstReply.map(m => ({ role: m.role, content: m.content }));
         } else {
           webMessages = [
             { role: "system", content: webSystemPrompt },
-            ...chatHistory.map(m => ({ role: m.role, content: m.content }))
+            ...historyBeforeFirstReply.map(m => ({ role: m.role, content: m.content }))
           ];
         }
 
