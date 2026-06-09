@@ -507,6 +507,16 @@ function renderEmptyState() {
     </div>`;
 }
 
+// ── Page Context Mode Notice ──────────────────────────────────
+function renderContextModeNotice(label) {
+  removeEmptyState();
+  const notice = document.createElement("div");
+  notice.className = "model-tag";
+  notice.textContent = `Seitenkontext: ${label}`;
+  document.getElementById("messages").appendChild(notice);
+  scrollToBottom();
+}
+
 // ── Page Content Fetch ────────────────────────────────────────
 async function fetchPageContent() {
   try {
@@ -554,9 +564,13 @@ async function classifyWithAI(text) {
   const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
   const userMsg = `Bezieht sich diese Frage auf den Inhalt einer bestimmten Webseite, die der Nutzer gerade geöffnet hat? Frage: ${text}`;
 
+  const timeout = new Promise(resolve => setTimeout(() => resolve(false), 3000));
+
   try {
+    let classifyPromise;
+
     if (providerId === "anthropic") {
-      const res = await fetch(PROVIDERS.anthropic.baseUrl, {
+      classifyPromise = fetch(PROVIDERS.anthropic.baseUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -570,15 +584,13 @@ async function classifyWithAI(text) {
           system: systemMsg,
           messages: [{ role: "user", content: userMsg }]
         })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.content?.[0]?.text ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
       });
-      const json = await res.json();
-      const answer = (json.content?.[0]?.text ?? "").toLowerCase();
-      return answer.includes("ja") || answer.includes("yes");
-    }
-
-    if (providerId === "gemini") {
+    } else if (providerId === "gemini") {
       const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
-      const res = await fetch(url, {
+      classifyPromise = fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -586,34 +598,36 @@ async function classifyWithAI(text) {
           systemInstruction: { parts: [{ text: systemMsg }] },
           generationConfig: { maxOutputTokens: 5 }
         })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
       });
-      const json = await res.json();
-      const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
-      return answer.includes("ja") || answer.includes("yes");
+    } else {
+      // OpenAI-compatible (openai, local, hyperspace)
+      const url = (providerId === "local" || providerId === "hyperspace")
+        ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
+        : PROVIDERS.openai.baseUrl;
+      classifyPromise = fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${settings.apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 5,
+          messages: [
+            { role: "system", content: systemMsg },
+            { role: "user", content: userMsg }
+          ]
+        })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
+      });
     }
 
-    // OpenAI-compatible (openai, local, hyperspace)
-    const url = (providerId === "local" || providerId === "hyperspace")
-      ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
-      : PROVIDERS.openai.baseUrl;
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${settings.apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 5,
-        messages: [
-          { role: "system", content: systemMsg },
-          { role: "user", content: userMsg }
-        ]
-      })
-    });
-    const json = await res.json();
-    const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
-    return answer.includes("ja") || answer.includes("yes");
+    return await Promise.race([classifyPromise, timeout]);
   } catch {
     return false;
   }
@@ -844,26 +858,26 @@ async function sendMessage() {
 
   const providerId = settings.provider;
 
-  const includeCtx = pageContextMode === "on"
-    ? true
-    : pageContextMode === "off"
-      ? false
-      : await shouldIncludePageContext(text);
-
-  let messages;
-  if (providerId === "anthropic" || providerId === "gemini") {
-    messages = chatHistory.map(m => ({ role: m.role, content: m.content }));
-  } else {
-    messages = [
-      { role: "system", content: buildSystemPrompt(includeCtx) },
-      ...chatHistory.map(m => ({ role: m.role, content: m.content }))
-    ];
-  }
-
   let aiBubble = null;
   let fullResponse = "";
 
   try {
+    const includeCtx = pageContextMode === "on"
+      ? true
+      : pageContextMode === "off"
+        ? false
+        : await shouldIncludePageContext(text);
+
+    let messages;
+    if (providerId === "anthropic" || providerId === "gemini") {
+      messages = chatHistory.map(m => ({ role: m.role, content: m.content }));
+    } else {
+      messages = [
+        { role: "system", content: buildSystemPrompt(includeCtx) },
+        ...chatHistory.map(m => ({ role: m.role, content: m.content }))
+      ];
+    }
+
     if (providerId === "gemini") {
       fullResponse = await callGemini(messages, includeCtx);
       typingEl.classList.add("hidden");
@@ -1008,9 +1022,14 @@ async function init() {
   document.getElementById("page-ctx-control").addEventListener("click", async (e) => {
     const btn = e.target.closest(".page-ctx-btn");
     if (!btn) return;
-    pageContextMode = btn.dataset.mode;
+    const newMode = btn.dataset.mode;
+    if (newMode === pageContextMode) return;
+    pageContextMode = newMode;
     updatePageCtrlUI();
     await browser.storage.local.set({ pageContextMode });
+
+    const MODE_LABELS = { auto: "Auto", on: "Seite", off: "Aus" };
+    renderContextModeNotice(MODE_LABELS[pageContextMode] ?? pageContextMode);
   });
 
   const debouncedRefetchModels = debounce(() => {
