@@ -652,6 +652,31 @@ function uncertaintyCheck(text) {
   return UNCERTAINTY_RE.test(text);
 }
 
+// ── Web Context Fetch (Perplexity via Hyperspace) ─────────────
+async function fetchWebContext(question) {
+  if (!settings.baseUrl) return null;
+  const url = settings.baseUrl.replace(/\/$/, "") + "/chat/completions";
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (settings.apiKey) headers["Authorization"] = `Bearer ${settings.apiKey}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: "sonar",
+        max_tokens: 1024,
+        stream: false,
+        messages: [{ role: "user", content: question }]
+      })
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.choices?.[0]?.message?.content ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── System Prompt Builder ─────────────────────────────────────
 function buildSystemPrompt(includePageContext = false) {
   const base = settings.systemPrompt?.trim() ||
