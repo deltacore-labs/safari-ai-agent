@@ -52,6 +52,7 @@ let chatHistory = [];
 let isStreaming = false;
 let currentPageContext = null;
 let pageToggleEnabled = true;
+let lastDisplayedModel = null;
 
 // ── Storage Helpers ───────────────────────────────────────────
 async function loadSettings() {
@@ -174,6 +175,7 @@ async function saveSettingsFromUI() {
 
   settings = newSettings;
   await saveSettings(settings);
+  lastDisplayedModel = null; // Force model tag to show on next message
 
   const btn = document.getElementById("save-settings-btn");
   const original = btn.textContent;
@@ -293,6 +295,15 @@ function scrollToBottom() {
   list.scrollTop = list.scrollHeight;
 }
 
+function renderModelTag(modelName) {
+  removeEmptyState();
+  const tag = document.createElement("div");
+  tag.className = "model-tag";
+  tag.textContent = modelName || "Kein Modell ausgewählt";
+  document.getElementById("messages").appendChild(tag);
+  scrollToBottom();
+}
+
 function renderMessage(role, content) {
   removeEmptyState();
 
@@ -334,6 +345,21 @@ function renderEmptyState() {
 }
 
 // ── Page Content Fetch ────────────────────────────────────────
+function updatePageToggleUI() {
+  const btn = document.getElementById("page-toggle-btn");
+  if (!btn) return;
+  const loaded = currentPageContext !== null;
+  const active = pageToggleEnabled && loaded;
+  btn.classList.toggle("active", active);
+  if (!pageToggleEnabled) {
+    btn.title = "Seite einbeziehen (deaktiviert)";
+  } else if (loaded) {
+    btn.title = `Seite einbeziehen: ${currentPageContext.title || currentPageContext.url}`;
+  } else {
+    btn.title = "Seite wird geladen…";
+  }
+}
+
 async function fetchPageContent() {
   try {
     const response = await browser.runtime.sendMessage({ action: "GET_PAGE_CONTENT" });
@@ -345,6 +371,7 @@ async function fetchPageContent() {
   } catch {
     currentPageContext = null;
   }
+  updatePageToggleUI();
 }
 
 // ── System Prompt Builder ─────────────────────────────────────
@@ -502,6 +529,14 @@ async function sendMessage() {
   input.style.height = "auto";
   document.getElementById("send-btn").disabled = true;
 
+  // Show model tag if model changed since last message
+  const currentModel = settings.model || settings.customModel || "?";
+  if (currentModel !== lastDisplayedModel) {
+    const providerName = PROVIDERS[settings.provider]?.name ?? settings.provider;
+    renderModelTag(`${providerName} · ${currentModel}`);
+    lastDisplayedModel = currentModel;
+  }
+
   chatHistory.push({ role: "user", content: text });
   renderMessage("user", text);
 
@@ -582,11 +617,15 @@ function closeSettings() {
 }
 
 // ── Page Toggle ───────────────────────────────────────────────
-function togglePageContext() {
-  pageToggleEnabled = !pageToggleEnabled;
-  const btn = document.getElementById("page-toggle-btn");
-  btn.classList.toggle("active", pageToggleEnabled);
-  btn.title = pageToggleEnabled ? "Seite einbeziehen (aktiv)" : "Seite einbeziehen (inaktiv)";
+async function togglePageContext() {
+  if (!currentPageContext) {
+    // No content yet — try to fetch now
+    await fetchPageContent();
+    if (currentPageContext) pageToggleEnabled = true;
+  } else {
+    pageToggleEnabled = !pageToggleEnabled;
+  }
+  updatePageToggleUI();
 }
 
 // ── Event Handlers ────────────────────────────────────────────
@@ -639,6 +678,7 @@ async function init() {
     );
   }
 
+  updatePageToggleUI();
   fetchPageContent();
 
   document.getElementById("send-btn").addEventListener("click", sendMessage);
