@@ -350,7 +350,24 @@ function markdownToHtml(text) {
     }
   );
 
-  // Unordered lists — collapse consecutive `- item` lines into a <ul>
+  // Horizontal rules — --- or *** or ___ on their own line → <hr>
+  escaped = escaped.replace(/^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$/gm, "<hr>");
+
+  // Tables — | col | col | with optional separator row |---|---|
+  escaped = escaped.replace(/(?:^|\n)((?:\|.+\|\n?)+)/g, (_, block) => {
+    const rows = block.trim().split("\n").filter(r => r.trim());
+    // Filter out pure separator rows like |---|---|
+    const dataRows = rows.filter(r => !/^\|[\s|:-]+\|$/.test(r));
+    if (dataRows.length === 0) return "";
+    const [headerRow, ...bodyRows] = dataRows;
+    const parseCells = row => row.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+    const headerCells = parseCells(headerRow).map(c => `<th>${c}</th>`).join("");
+    const bodyHtml = bodyRows.map(r =>
+      `<tr>${parseCells(r).map(c => `<td>${c}</td>`).join("")}</tr>`
+    ).join("");
+    return `\n<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+  });
+
   escaped = escaped.replace(/(?:^|\n)((?:- .+(?:\n|$))+)/g, (_, block) => {
     const items = block
       .split("\n")
@@ -366,7 +383,7 @@ function markdownToHtml(text) {
     .map(chunk => {
       const trimmed = chunk.trim();
       if (!trimmed) return "";
-      if (trimmed.startsWith("<pre") || trimmed.startsWith("<ul")) return trimmed;
+      if (trimmed.startsWith("<pre") || trimmed.startsWith("<ul") || trimmed.startsWith("<table") || trimmed.startsWith("<hr")) return trimmed;
       return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
     })
     .join("");
