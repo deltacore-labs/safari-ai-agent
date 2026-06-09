@@ -624,17 +624,11 @@ async function shouldIncludePageContext(text) {
 }
 
 // ── System Prompt Builder ─────────────────────────────────────
-function buildSystemPrompt() {
+function buildSystemPrompt(includePageContext = false) {
   const base = settings.systemPrompt?.trim() ||
     "Du bist ein hilfreicher KI-Assistent.";
 
-  if (!currentPageContext) return base;
-
-  if (currentPageContext._debugError) {
-    return base + "\n\n[DEBUG Seiteninhalt-Fehler]: " + currentPageContext._debugError;
-  }
-
-  if (pageContextMode === "off") return base;
+  if (!includePageContext || !currentPageContext || currentPageContext._debugError) return base;
 
   return [
     base,
@@ -721,8 +715,8 @@ function normalizeAnthropicMessages(messages) {
   return merged;
 }
 
-async function* streamAnthropic(messages) {
-  const systemPrompt = buildSystemPrompt();
+async function* streamAnthropic(messages, includeCtx = false) {
+  const systemPrompt = buildSystemPrompt(includeCtx);
   const userMessages = normalizeAnthropicMessages(messages);
 
   const response = await fetch(PROVIDERS.anthropic.baseUrl, {
@@ -760,8 +754,8 @@ async function* streamAnthropic(messages) {
 }
 
 // ── Gemini REST ───────────────────────────────────────────────
-async function callGemini(messages) {
-  const systemPrompt = buildSystemPrompt();
+async function callGemini(messages, includeCtx = false) {
+  const systemPrompt = buildSystemPrompt(includeCtx);
   const model = settings.model;
   const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
 
@@ -848,12 +842,18 @@ async function sendMessage() {
 
   const providerId = settings.provider;
 
+  const includeCtx = pageContextMode === "on"
+    ? true
+    : pageContextMode === "off"
+      ? false
+      : await shouldIncludePageContext(text);
+
   let messages;
   if (providerId === "anthropic" || providerId === "gemini") {
     messages = chatHistory.map(m => ({ role: m.role, content: m.content }));
   } else {
     messages = [
-      { role: "system", content: buildSystemPrompt() },
+      { role: "system", content: buildSystemPrompt(includeCtx) },
       ...chatHistory.map(m => ({ role: m.role, content: m.content }))
     ];
   }
@@ -863,12 +863,12 @@ async function sendMessage() {
 
   try {
     if (providerId === "gemini") {
-      fullResponse = await callGemini(messages);
+      fullResponse = await callGemini(messages, includeCtx);
       typingEl.classList.add("hidden");
       aiBubble = renderMessage("ai", fullResponse);
     } else {
       const generator = providerId === "anthropic"
-        ? streamAnthropic(messages)
+        ? streamAnthropic(messages, includeCtx)
         : streamOpenAI(messages);
 
       let firstToken = true;
