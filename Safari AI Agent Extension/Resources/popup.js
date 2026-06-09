@@ -518,7 +518,7 @@ function renderContextModeNotice(label) {
   removeEmptyState();
   const notice = document.createElement("div");
   notice.className = "model-tag";
-  notice.textContent = `Seitenkontext: ${label}`;
+  notice.textContent = label;
   document.getElementById("messages").appendChild(notice);
   scrollToBottom();
 }
@@ -777,8 +777,8 @@ function normalizeAnthropicMessages(messages) {
   return merged;
 }
 
-async function* streamAnthropic(messages, includeCtx = false) {
-  const systemPrompt = buildSystemPrompt(includeCtx);
+async function* streamAnthropic(messages, includeCtx = false, webContext = null) {
+  const systemPrompt = buildSystemPrompt(includeCtx, webContext);
   const userMessages = normalizeAnthropicMessages(messages);
 
   const response = await fetch(PROVIDERS.anthropic.baseUrl, {
@@ -816,8 +816,8 @@ async function* streamAnthropic(messages, includeCtx = false) {
 }
 
 // ── Gemini REST ───────────────────────────────────────────────
-async function callGemini(messages, includeCtx = false) {
-  const systemPrompt = buildSystemPrompt(includeCtx);
+async function callGemini(messages, includeCtx = false, webContext = null) {
+  const systemPrompt = buildSystemPrompt(includeCtx, webContext);
   const model = settings.model;
   const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
 
@@ -950,6 +950,61 @@ async function sendMessage() {
     chatHistory.push({ role: "assistant", content: fullResponse });
     await saveHistory(chatHistory);
 
+    // Web search fallback — only runs once per user message
+    if (fullResponse && uncertaintyCheck(fullResponse) && settings.baseUrl) {
+      renderContextModeNotice("Websuche wird durchgeführt…");
+      typingEl.classList.remove("hidden");
+      scrollToBottom();
+
+      const webContext = await fetchWebContext(text);
+
+      typingEl.classList.add("hidden");
+
+      if (webContext) {
+        renderContextModeNotice("Websuche durchgeführt");
+
+        let webMessages;
+        const webSystemPrompt = buildSystemPrompt(includeCtx, webContext);
+        if (providerId === "anthropic" || providerId === "gemini") {
+          webMessages = chatHistory.map(m => ({ role: m.role, content: m.content }));
+        } else {
+          webMessages = [
+            { role: "system", content: webSystemPrompt },
+            ...chatHistory.map(m => ({ role: m.role, content: m.content }))
+          ];
+        }
+
+        let webBubble = null;
+        let webResponse = "";
+
+        if (providerId === "gemini") {
+          webResponse = await callGemini(webMessages, includeCtx, webContext);
+          webBubble = renderMessage("ai", webResponse);
+        } else {
+          const webGenerator = providerId === "anthropic"
+            ? streamAnthropic(webMessages, includeCtx, webContext)
+            : streamOpenAI(webMessages);
+
+          let firstWebToken = true;
+          for await (const token of webGenerator) {
+            if (firstWebToken) {
+              webBubble = renderMessage("ai", "");
+              firstWebToken = false;
+            }
+            webResponse += token;
+            webBubble.innerHTML = markdownToHtml(webResponse);
+            webBubble._rawText = webResponse;
+            scrollToBottomIfNear();
+          }
+        }
+
+        if (webResponse) {
+          chatHistory.push({ role: "assistant", content: webResponse });
+          await saveHistory(chatHistory);
+        }
+      }
+    }
+
   } catch (err) {
     typingEl.classList.add("hidden");
     renderMessage("ai", `Fehler: ${err.message}`);
@@ -1074,7 +1129,7 @@ async function init() {
     updatePageCtrlUI();
     await browser.storage.local.set({ pageContextMode });
 
-    const MODE_LABELS = { auto: "Auto", on: "Seite", off: "Aus" };
+    const MODE_LABELS = { auto: "Seitenkontext: Auto", on: "Seitenkontext: Seite", off: "Seitenkontext: Aus" };
     renderContextModeNotice(MODE_LABELS[pageContextMode] ?? pageContextMode);
   });
 
