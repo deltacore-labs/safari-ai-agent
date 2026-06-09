@@ -646,7 +646,7 @@ async function shouldIncludePageContext(text) {
 }
 
 // ── Uncertainty Detection ─────────────────────────────────────
-const UNCERTAINTY_RE = /nach meinem (trainingsstand|wissensstand)|ich wei[sß] (es )?nicht|kann ich nicht bestätigen|nicht (ganz |völlig )?sicher|mein wissen reicht bis|ich habe keinen zugriff|kann ich nicht mit sicherheit|as of my (knowledge|training)|i (don't|do not|cannot|can't) (know|confirm|access|verify)|my (knowledge|training) (cutoff|ends|is limited)|i'?m not (sure|certain)|i have no (access|information)/i;
+const UNCERTAINTY_RE = /(?:nach |bis |ab )?meinem (trainingsstand|wissensstand)|meines wissens(stand)?s? bis|wissensstand bis|ich wei[sß] (es )?nicht|kann ich nicht (bestätigen|sagen|wissen)|nicht (ganz |völlig )?sicher|mein wissen reicht bis|ich habe keinen zugriff|kann ich nicht mit sicherheit|keine aktuellen informationen|keine informationen (nach|über|zu)|seit (der |einem )?(wahl|präsidentschaft|ereignis)|as of my (knowledge|training)|i (don't|do not|cannot|can't) (know|confirm|access|verify|tell)|my (knowledge|training) (cutoff|ends|is limited)|i'?m not (sure|certain)|i have no (access|information)|beyond my (training|knowledge)|after (april|may|june|july|august|september|october|november|december|january|february|march) 20[0-9]{2}/i;
 
 function uncertaintyCheck(text) {
   return UNCERTAINTY_RE.test(text);
