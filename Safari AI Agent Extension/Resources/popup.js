@@ -646,10 +646,81 @@ async function shouldIncludePageContext(text) {
 }
 
 // ── Uncertainty Detection ─────────────────────────────────────
-const UNCERTAINTY_RE = /(?:nach |bis |ab )?meinem (trainingsstand|wissensstand)|trainingsdaten.{0,10}cutoff|cutoff.{0,20}datum|wissensstand.{0,30}cutoff|cutoff.{0,10}(hat|habe|haben)|meines wissens(stand)?s? bis|wissensstand bis|ich wei[sß] (es )?nicht|kann ich nicht (bestätigen|sagen|wissen)|nicht (ganz |völlig )?sicher|mein wissen reicht bis|ich habe keinen zugriff|kann ich nicht mit sicherheit|keine (zuverlässigen|verlässlichen|aktuellen) informationen|keine informationen (nach|über|zu)|nicht (vollständig |mehr )?abdeckt|liegt mir (leider )?nicht|liegen mir (leider )?nicht|tut mir leid.{0,30}nicht (mehr |weiter )?helfen|empfehle.{0,20}(aktuelle|nachrichtensuche|newsroom)|seit (der |einem )?(wahl|präsidentschaft|ereignis)|as of my (knowledge|training)|i (don't|do not|cannot|can't) (know|confirm|access|verify|tell)|my (knowledge|training) (cutoff|ends|is limited)|i'?m not (sure|certain)|i have no (access|information)|beyond my (training|knowledge)|after (april|may|june|july|august|september|october|november|december|january|february|march) 20[0-9]{2}/i;
+async function uncertaintyCheck(text) {
+  const providerId = settings.provider;
+  const model = providerId === "local" ? settings.customModel : settings.model;
+  if (!model) return false;
+  if (!settings.apiKey && providerId !== "local" && providerId !== "hyperspace") return false;
 
-function uncertaintyCheck(text) {
-  return UNCERTAINTY_RE.test(text);
+  const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
+  const userMsg = `Signalisiert der folgende Text, dass das KI-Modell keine aktuellen oder zuverlässigen Informationen zu dem Thema hat (z.B. wegen Trainingsdaten-Cutoff, fehlendem Internetzugang, oder Wissenslücken zu aktuellen Ereignissen)? Text: ${text}`;
+
+  const timeout = new Promise(resolve => setTimeout(() => resolve(false), 4000));
+
+  try {
+    let classifyPromise;
+
+    if (providerId === "anthropic") {
+      classifyPromise = fetch(PROVIDERS.anthropic.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-allow-browser": "true"
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 5,
+          system: systemMsg,
+          messages: [{ role: "user", content: userMsg }]
+        })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.content?.[0]?.text ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
+      });
+    } else if (providerId === "gemini") {
+      const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
+      classifyPromise = fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userMsg }] }],
+          systemInstruction: { parts: [{ text: systemMsg }] },
+          generationConfig: { maxOutputTokens: 5 }
+        })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
+      });
+    } else {
+      // OpenAI-compatible (openai, local, hyperspace)
+      const url = (providerId === "local" || providerId === "hyperspace")
+        ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
+        : PROVIDERS.openai.baseUrl;
+      const headers = { "Content-Type": "application/json" };
+      if (settings.apiKey) headers["Authorization"] = `Bearer ${settings.apiKey}`;
+      classifyPromise = fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model,
+          max_tokens: 5,
+          messages: [
+            { role: "system", content: systemMsg },
+            { role: "user", content: userMsg }
+          ]
+        })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
+      });
+    }
+
+    return await Promise.race([classifyPromise, timeout]);
+  } catch {
+    return false;
+  }
 }
 
 // ── Web Context Fetch (Perplexity via Hyperspace) ─────────────
@@ -953,7 +1024,7 @@ async function sendMessage() {
     await saveHistory(chatHistory);
 
     // Web search fallback — only runs once per user message
-    if (fullResponse && uncertaintyCheck(fullResponse) && settings.baseUrl) {
+    if (fullResponse && await uncertaintyCheck(fullResponse) && settings.baseUrl) {
       renderContextModeNotice("Websuche wird durchgeführt…");
       typingEl.classList.remove("hidden");
       scrollToBottom();
