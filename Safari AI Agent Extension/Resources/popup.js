@@ -324,8 +324,8 @@ function getProviderAvatar() {
 
   const AVATARS = {
     anthropic: {
-      bg: "#cc785c",
-      img: null  // placeholder until logo-anthropic.png is added
+      bg: "#f5f0eb",
+      img: "images/logo-anthropic.svg"
     },
     openai: {
       bg: "#000000",
