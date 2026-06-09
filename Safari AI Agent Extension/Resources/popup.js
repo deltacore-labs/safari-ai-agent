@@ -38,10 +38,10 @@ const PROVIDERS = {
 };
 
 const DEFAULT_SETTINGS = {
-  provider: "openai",
+  provider: "anthropic",
   apiKey: "",
   baseUrl: "",
-  model: "gpt-4o",
+  model: "claude-sonnet-4-6",
   customModel: "",
   systemPrompt: ""
 };
@@ -150,16 +150,11 @@ function loadSettingsIntoUI() {
   document.getElementById("base-url-input").value = settings.baseUrl;
   document.getElementById("system-prompt-input").value = settings.systemPrompt;
   updateBaseUrlVisibility(settings.provider);
-  populateModelDropdown(settings.provider);
+  populateModelDropdown(settings.provider);  // async, fire-and-forget — handles model restore internally
 
   const isCustom = settings.provider === "local" || settings.provider === "hyperspace";
   if (isCustom) {
     document.getElementById("model-custom-input").value = settings.customModel;
-  } else {
-    const select = document.getElementById("model-select");
-    if ([...select.options].some(o => o.value === settings.model)) {
-      select.value = settings.model;
-    }
   }
 }
 
@@ -647,6 +642,14 @@ async function init() {
   document.getElementById("provider-select").addEventListener("change", onProviderChange);
   document.getElementById("user-input").addEventListener("keydown", onInputKeydown);
   document.getElementById("user-input").addEventListener("input", autoResizeTextarea);
+
+  const debouncedRefetchModels = debounce(() => {
+    const providerId = document.getElementById("provider-select").value;
+    populateModelDropdown(providerId);
+  }, 300);
+
+  document.getElementById("base-url-input").addEventListener("input", debouncedRefetchModels);
+  document.getElementById("api-key-input").addEventListener("input", debouncedRefetchModels);
 }
 
 document.addEventListener("DOMContentLoaded", init);
