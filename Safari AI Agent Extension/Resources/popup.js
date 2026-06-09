@@ -66,12 +66,36 @@ async function saveSettings(s) {
 
 async function loadHistory() {
   const result = await browser.storage.local.get(["chatHistory"]);
-  return Array.isArray(result.chatHistory) ? result.chatHistory : [];
+  const history = Array.isArray(result.chatHistory) ? result.chatHistory : [];
+  // Truncate each message content to 10k chars to prevent runaway storage
+  return history.map(m => ({
+    ...m,
+    content: m.content.length > 10000 ? m.content.slice(0, 10000) + "…" : m.content
+  }));
 }
 
 async function saveHistory(h) {
-  const trimmed = h.length > 100 ? h.slice(h.length - 100) : h;
-  await browser.storage.local.set({ chatHistory: trimmed });
+  const MAX_BYTES = 512 * 1024; // 512KB limit for chat history
+  let trimmed = h.length > 100 ? h.slice(h.length - 100) : [...h];
+
+  // Trim oldest messages until serialized size fits
+  while (trimmed.length > 0) {
+    const bytes = new TextEncoder().encode(JSON.stringify(trimmed)).length;
+    if (bytes <= MAX_BYTES) break;
+    trimmed = trimmed.slice(Math.ceil(trimmed.length * 0.2)); // drop oldest 20%
+  }
+
+  try {
+    await browser.storage.local.set({ chatHistory: trimmed });
+  } catch {
+    // Storage still full even after trimming — save only last 2 exchanges (4 messages)
+    const minimal = trimmed.slice(-4);
+    try {
+      await browser.storage.local.set({ chatHistory: minimal });
+    } catch {
+      // Give up persisting — keep in memory only
+    }
+  }
 }
 
 // ── Settings UI ───────────────────────────────────────────────
