@@ -537,6 +537,92 @@ async function fetchPageContent() {
   }
 }
 
+// ── Page-Context Detection ────────────────────────────────────
+const PAGE_KEYWORDS_RE = /\b(diese[rn]?\s+(?:seite|artikel|text|inhalt)|was\s+steht\s+(?:hier|da|dort)|(?:hier|da|dort)\s+steht|auf\s+der\s+seite|den\s+text|dem\s+artikel|fasse\s+zusammen|übersetze\s+(?:das|den|die|mir)|erkläre\s+mir\s+das|this\s+page|the\s+article|what\s+does\s+it\s+say|summarize\s+this|translate\s+this)\b/i;
+
+function keywordCheck(text) {
+  return PAGE_KEYWORDS_RE.test(text);
+}
+
+async function classifyWithAI(text) {
+  const providerId = settings.provider;
+  const model = providerId === "local" ? settings.customModel : settings.model;
+  if (!model) return false;
+
+  const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
+  const userMsg = `Bezieht sich diese Frage auf den Inhalt einer bestimmten Webseite, die der Nutzer gerade geöffnet hat? Frage: ${text}`;
+
+  try {
+    if (providerId === "anthropic") {
+      const res = await fetch(PROVIDERS.anthropic.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-allow-browser": "true"
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 5,
+          system: systemMsg,
+          messages: [{ role: "user", content: userMsg }]
+        })
+      });
+      const json = await res.json();
+      const answer = (json.content?.[0]?.text ?? "").toLowerCase();
+      return answer.includes("ja") || answer.includes("yes");
+    }
+
+    if (providerId === "gemini") {
+      const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userMsg }] }],
+          systemInstruction: { parts: [{ text: systemMsg }] },
+          generationConfig: { maxOutputTokens: 5 }
+        })
+      });
+      const json = await res.json();
+      const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
+      return answer.includes("ja") || answer.includes("yes");
+    }
+
+    // OpenAI-compatible (openai, local, hyperspace)
+    const url = (providerId === "local" || providerId === "hyperspace")
+      ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
+      : PROVIDERS.openai.baseUrl;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${settings.apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 5,
+        messages: [
+          { role: "system", content: systemMsg },
+          { role: "user", content: userMsg }
+        ]
+      })
+    });
+    const json = await res.json();
+    const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
+    return answer.includes("ja") || answer.includes("yes");
+  } catch {
+    return false;
+  }
+}
+
+async function shouldIncludePageContext(text) {
+  if (!currentPageContext || currentPageContext._debugError) return false;
+  if (keywordCheck(text)) return true;
+  return await classifyWithAI(text);
+}
+
 // ── System Prompt Builder ─────────────────────────────────────
 function buildSystemPrompt() {
   const base = settings.systemPrompt?.trim() ||
