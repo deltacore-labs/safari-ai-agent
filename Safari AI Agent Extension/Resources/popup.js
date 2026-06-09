@@ -186,6 +186,12 @@ function updateBaseUrlVisibility(providerId) {
   section.style.display = isCustom ? "block" : "none";
 }
 
+function updatePageCtrlUI() {
+  document.querySelectorAll(".page-ctx-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.mode === pageContextMode);
+  });
+}
+
 function loadSettingsIntoUI() {
   document.getElementById("provider-select").value = settings.provider;
   document.getElementById("api-key-input").value = settings.apiKey;
@@ -845,8 +851,10 @@ function onProviderChange() {
   updateBaseUrlVisibility(providerId);
   const baseUrlInput = document.getElementById("base-url-input");
   const defaultUrl = PROVIDERS[providerId]?.baseUrl ?? "";
-  if (providerId === "hyperspace" || !baseUrlInput.value.trim()) {
+  if (defaultUrl) {
     baseUrlInput.value = defaultUrl;
+  } else if (!baseUrlInput.value.trim()) {
+    baseUrlInput.value = "";
   }
   applyTheme(providerId, "");
   populateModelDropdown(providerId);
@@ -882,6 +890,7 @@ async function init() {
   settings = await loadSettings();
   const stored = await browser.storage.local.get(["pageContextMode"]);
   pageContextMode = stored.pageContextMode ?? "auto";
+  updatePageCtrlUI();
   chatHistory = await loadHistory();
   applyTheme(settings.provider, settings.model);
 
@@ -906,6 +915,14 @@ async function init() {
   document.getElementById("user-input").addEventListener("input", autoResizeTextarea);
   document.getElementById("new-chat-btn").addEventListener("click", startNewConversation);
   document.getElementById("refresh-models-btn").addEventListener("click", refreshModels);
+
+  document.getElementById("page-ctx-control").addEventListener("click", async (e) => {
+    const btn = e.target.closest(".page-ctx-btn");
+    if (!btn) return;
+    pageContextMode = btn.dataset.mode;
+    updatePageCtrlUI();
+    await browser.storage.local.set({ pageContextMode });
+  });
 
   const debouncedRefetchModels = debounce(() => {
     const providerId = document.getElementById("provider-select").value;
