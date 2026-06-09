@@ -137,6 +137,56 @@ async function saveSettingsFromUI() {
   setTimeout(() => { btn.textContent = original; }, 1500);
 }
 
+// ── Debounce Helper ───────────────────────────────────────────
+function debounce(fn, ms) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), ms);
+  };
+}
+
+// ── Model Fetching ────────────────────────────────────────────
+async function fetchModelsForProvider(providerId) {
+  const apiKey = document.getElementById("api-key-input").value.trim();
+  const baseUrl = document.getElementById("base-url-input").value.trim();
+
+  if (providerId === "anthropic") return null;
+  if (providerId === "gemini") return null;
+
+  if (providerId === "openai") {
+    if (!apiKey) return { hint: "API-Key eingeben um Modelle zu laden" };
+    const res = await fetch("https://api.openai.com/v1/models", {
+      headers: { "Authorization": `Bearer ${apiKey}` }
+    });
+    if (res.status === 401) return { error: "API-Key ungültig" };
+    if (!res.ok) return { error: `Fehler ${res.status}` };
+    const json = await res.json();
+    const models = (json.data ?? [])
+      .map(m => m.id)
+      .filter(id => id.includes("gpt"))
+      .sort();
+    return models.length ? models : { error: "Keine Modelle gefunden" };
+  }
+
+  // local or hyperspace — OpenAI-compatible /models endpoint
+  if (!baseUrl) return { hint: "Base URL eingeben um Modelle zu laden" };
+  const url = baseUrl.replace(/\/$/, "") + "/models";
+  try {
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+    const res = await fetch(url, { headers });
+    if (res.status === 401) return { error: "API-Key ungültig" };
+    if (res.status === 404) return { error: "Base URL nicht gefunden" };
+    if (!res.ok) return { error: `Fehler ${res.status}` };
+    const json = await res.json();
+    const models = (json.data ?? []).map(m => m.id).filter(Boolean).sort();
+    return models.length ? models : { error: "Keine Modelle gefunden" };
+  } catch {
+    return { error: "Modelle konnten nicht geladen werden" };
+  }
+}
+
 // ── Markdown Renderer ─────────────────────────────────────────
 function markdownToHtml(text) {
   let escaped = text
