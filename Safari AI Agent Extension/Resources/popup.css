@@ -444,3 +444,37 @@ html, body {
   background: var(--color-surface-1);
   border-top: 1px solid var(--color-hairline);
 }
+
+/* ── Model Fetch UI ──────────────────────────────────────────── */
+.settings-label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-bottom: 6px;
+}
+.settings-label-row .settings-label {
+  margin-bottom: 0;
+}
+
+.model-loading-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--color-hairline);
+  border-top-color: var(--color-fin-orange);
+  border-radius: var(--radius-pill);
+  animation: spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.model-fetch-message {
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 5px;
+}
+.model-fetch-message.error { color: var(--color-error); }
+.model-fetch-message.hint  { color: var(--color-ink-tertiary); }
