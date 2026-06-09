@@ -199,12 +199,34 @@ async function saveSettingsFromUI() {
 
   settings = newSettings;
   await saveSettings(settings);
-  lastDisplayedModel = null; // Force model tag to show on next message
+  lastDisplayedModel = null;
+  applyTheme(settings.provider, settings.model);
 
   const btn = document.getElementById("save-settings-btn");
   const original = btn.textContent;
   btn.textContent = "Gespeichert ✓";
   setTimeout(() => { btn.textContent = original; }, 1500);
+}
+
+// ── Theme System ──────────────────────────────────────────────
+function applyTheme(providerId, model) {
+  const m = (model || "").toLowerCase();
+  let theme = "default";
+
+  if (providerId === "anthropic") {
+    theme = "anthropic";
+  } else if (providerId === "openai") {
+    theme = "openai";
+  } else if (providerId === "gemini") {
+    theme = "gemini";
+  } else if (providerId === "hyperspace" || providerId === "local") {
+    if (m.includes("claude") || m.includes("anthropic")) theme = "anthropic";
+    else if (m.includes("gpt") || m.includes("openai")) theme = "openai";
+    else if (m.includes("gemini")) theme = "gemini";
+    else theme = "default";
+  }
+
+  document.documentElement.setAttribute("data-theme", theme);
 }
 
 // ── Debounce Helper ───────────────────────────────────────────
@@ -447,7 +469,9 @@ function updatePageToggleUI() {
 
 async function fetchPageContent() {
   try {
-    const response = await browser.runtime.sendMessage({ action: "GET_PAGE_CONTENT" });
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    if (!tabs || tabs.length === 0) { currentPageContext = null; updatePageToggleUI(); return; }
+    const response = await browser.tabs.sendMessage(tabs[0].id, { action: "EXTRACT_DOM" });
     if (response && !response.error) {
       currentPageContext = response;
     } else {
@@ -755,6 +779,7 @@ function onProviderChange() {
   if (!baseUrlInput.value.trim()) {
     baseUrlInput.value = PROVIDERS[providerId]?.baseUrl ?? "";
   }
+  applyTheme(providerId, "");
   populateModelDropdown(providerId);
 }
 
@@ -788,6 +813,7 @@ function refreshModels() {
 async function init() {
   settings = await loadSettings();
   chatHistory = await loadHistory();
+  applyTheme(settings.provider, settings.model);
 
   if (chatHistory.length === 0) {
     renderEmptyState();
