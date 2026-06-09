@@ -163,25 +163,38 @@ html, body {
   color: var(--color-ink);
 }
 
-/* ── Page Toggle Button ──────────────────────────────────────── */
-.toggle-btn {
-  height: 28px;
-  padding: 0 var(--space-xs);
-  display: flex; align-items: center; gap: 5px;
+/* ── Page Context Segmented Control ─────────────────────────── */
+.page-ctx-control {
+  display: flex;
+  align-items: center;
   background: var(--color-surface-2);
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-pill);
+  padding: 2px;
+  gap: 1px;
+}
+
+.page-ctx-btn {
+  height: 24px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-pill);
   color: var(--color-ink-muted);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 150ms, color 150ms, border-color 150ms;
+  transition: background 150ms, color 150ms;
   white-space: nowrap;
 }
-.toggle-btn.active {
+
+.page-ctx-btn:hover {
+  color: var(--color-ink);
+}
+
+.page-ctx-btn.active {
   background: var(--color-fin-orange);
-  border-color: var(--color-fin-orange);
   color: #ffffff;
 }
 
@@ -288,6 +301,31 @@ html, body {
 .message-bubble.ai li   { margin: 0.1em 0; }
 .message-bubble.ai a    { color: var(--color-fin-orange); text-decoration: none; }
 .message-bubble.ai a:hover { text-decoration: underline; }
+
+/* ── Copy Button ─────────────────────────────────────────────── */
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+  padding: 3px 6px;
+  background: transparent;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xs);
+  color: var(--color-ink-muted, #888);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  float: right;
+  clear: both;
+}
+.message-bubble.ai:hover .copy-btn,
+.copy-btn:focus {
+  opacity: 1;
+}
+.copy-btn:hover {
+  color: var(--color-ink);
+}
 
 /* ── Typing Indicator ────────────────────────────────────────── */
 .typing-indicator {
