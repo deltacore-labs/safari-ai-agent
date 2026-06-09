@@ -963,8 +963,6 @@ async function sendMessage() {
       typingEl.classList.add("hidden");
 
       if (webContext) {
-        renderContextModeNotice("Websuche durchgeführt");
-
         let webMessages;
         const webSystemPrompt = buildSystemPrompt(includeCtx, webContext);
         if (providerId === "anthropic" || providerId === "gemini") {
