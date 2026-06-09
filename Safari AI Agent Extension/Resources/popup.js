@@ -295,6 +295,13 @@ function scrollToBottom() {
   list.scrollTop = list.scrollHeight;
 }
 
+function scrollToBottomIfNear() {
+  const list = document.getElementById("messages");
+  const threshold = 80;
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < threshold;
+  if (nearBottom) list.scrollTop = list.scrollHeight;
+}
+
 function renderModelTag(modelName) {
   removeEmptyState();
   const tag = document.createElement("div");
@@ -587,7 +594,7 @@ async function sendMessage() {
         }
         fullResponse += token;
         aiBubble.innerHTML = markdownToHtml(fullResponse);
-        scrollToBottom();
+        scrollToBottomIfNear();
       }
     }
 
