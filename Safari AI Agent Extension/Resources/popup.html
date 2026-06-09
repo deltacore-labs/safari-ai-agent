@@ -118,10 +118,14 @@
         </section>
 
         <section class="settings-section">
-          <label class="settings-label" for="model-select">Modell</label>
+          <div class="settings-label-row">
+            <label class="settings-label" for="model-select">Modell</label>
+            <span id="model-spinner" class="model-loading-spinner" style="display:none" aria-hidden="true"></span>
+          </div>
           <select id="model-select" class="settings-select"></select>
           <input type="text" id="model-custom-input" class="settings-input" style="margin-top:8px;display:none"
                  placeholder="Modellname, z.B. llama3">
+          <p id="model-fetch-message" class="model-fetch-message" style="display:none"></p>
         </section>
 
         <section class="settings-section">
