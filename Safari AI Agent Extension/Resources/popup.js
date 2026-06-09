@@ -178,7 +178,7 @@ function loadSettingsIntoUI() {
   updateBaseUrlVisibility(settings.provider);
   populateModelDropdown(settings.provider);  // async, fire-and-forget — handles model restore internally
 
-  const isCustom = settings.provider === "local" || settings.provider === "hyperspace";
+  const isCustom = settings.provider === "local";
   if (isCustom) {
     document.getElementById("model-custom-input").value = settings.customModel;
   }
@@ -186,7 +186,7 @@ function loadSettingsIntoUI() {
 
 async function saveSettingsFromUI() {
   const providerId = document.getElementById("provider-select").value;
-  const isCustom = providerId === "local" || providerId === "hyperspace";
+  const isCustom = providerId === "local";
 
   const newSettings = {
     provider: providerId,
@@ -413,7 +413,7 @@ async function* streamOpenAI(messages) {
   const url = (providerId === "local" || providerId === "hyperspace")
     ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
     : provider.baseUrl;
-  const model = (providerId === "local" || providerId === "hyperspace")
+  const model = providerId === "local"
     ? settings.customModel
     : settings.model;
 
