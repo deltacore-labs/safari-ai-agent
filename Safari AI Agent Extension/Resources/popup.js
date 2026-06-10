@@ -1652,6 +1652,67 @@ async function clearHistory() {
   } catch { /* ignore */ }
 }
 
+async function exportConversations() {
+  const index = await loadConversationsIndex();
+  const conversations = [];
+  for (const entry of index) {
+    const messages = await loadConversation(entry.id);
+    conversations.push({ ...entry, messages });
+  }
+  const payload = { version: 1, exportedAt: Date.now(), conversations };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const today = new Date().toISOString().slice(0, 10);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ai-agent-export-${today}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function importConversations(file) {
+  if (!file) return;
+  const text = await file.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    alert("Ungültige Datei – kein valides JSON.");
+    return;
+  }
+  if (!payload?.conversations || !Array.isArray(payload.conversations)) {
+    alert("Ungültiges Format.");
+    return;
+  }
+
+  const existingIndex = await loadConversationsIndex();
+  const existingIds = new Set(existingIndex.map(c => c.id));
+  let imported = 0;
+
+  for (const conv of payload.conversations) {
+    if (!conv.id || existingIds.has(conv.id)) continue;
+    if (!Array.isArray(conv.messages) || conv.messages.length === 0) continue;
+    await saveConversation(conv.id, conv.messages);
+    existingIndex.unshift({
+      id: conv.id,
+      title: conv.title || "Importierte Unterhaltung",
+      updatedAt: conv.updatedAt || Date.now(),
+      ...(conv.pinned ? { pinned: true } : {})
+    });
+    existingIds.add(conv.id);
+    imported++;
+  }
+
+  existingIndex.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.updatedAt - a.updatedAt;
+  });
+  await saveConversationsIndex(existingIndex);
+
+  alert(`${imported} Unterhaltung${imported !== 1 ? "en" : ""} importiert.`);
+}
+
 async function startNewConversation() {
   if (chatHistory.length === 0) return; // guard: don't create empty conv
 
@@ -1733,6 +1794,15 @@ async function init() {
   document.getElementById("back-btn").addEventListener("click", closeSettings);
   document.getElementById("save-settings-btn").addEventListener("click", saveSettingsFromUI);
   document.getElementById("clear-history-btn").addEventListener("click", clearHistory);
+  document.getElementById("export-btn").addEventListener("click", exportConversations);
+  document.getElementById("import-btn").addEventListener("click", () => {
+    document.getElementById("import-file-input").click();
+  });
+  document.getElementById("import-file-input").addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (file) importConversations(file);
+    e.target.value = "";
+  });
   document.getElementById("toggle-key-btn").addEventListener("click", toggleKeyVisibility);
   document.getElementById("provider-select").addEventListener("change", onProviderChange);
   document.getElementById("user-input").addEventListener("keydown", onInputKeydown);

@@ -184,6 +184,15 @@
                     placeholder="Du bist ein hilfreicher KI-Assistent…"></textarea>
         </section>
 
+        <section class="settings-section">
+          <label class="settings-label">Daten</label>
+          <div style="display:flex;gap:8px">
+            <button id="export-btn" class="btn-secondary" type="button" style="flex:1">Exportieren</button>
+            <button id="import-btn" class="btn-secondary" type="button" style="flex:1">Importieren</button>
+          </div>
+          <input type="file" id="import-file-input" accept=".json" style="display:none">
+        </section>
+
         <section class="settings-section settings-section--danger">
           <button id="clear-history-btn" class="btn-secondary btn--full" type="button">
             Verlauf löschen
