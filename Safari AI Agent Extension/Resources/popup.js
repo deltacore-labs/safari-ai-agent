@@ -341,7 +341,7 @@ function markdownToHtml(text) {
 
   // Links — sanitize href, fall back to plain text on dangerous schemes
   escaped = escaped.replace(
-    /\[([^\]]+)\]\((\S+?)\)/g,
+    /\[([^\]]+)\]\(([^()\s]+(?:\([^)]*\))?[^()\s]*)\)/g,
     (_, label, href) => {
       const safe = sanitizeUrl(href);
       if (!safe) return label;
