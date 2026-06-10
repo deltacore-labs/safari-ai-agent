@@ -50,6 +50,7 @@ const DEFAULT_SETTINGS = {
 let settings = { ...DEFAULT_SETTINGS };
 let chatHistory = [];
 let isStreaming = false;
+let abortController = null;
 let currentPageContext = null;
 let pageContextMode = "auto"; // "auto" | "on" | "off"
 let lastDisplayedModel = null;
@@ -810,7 +811,7 @@ async function* parseSSE(response) {
 }
 
 // ── OpenAI / Local / Hyperspace Streaming ────────────────────
-async function* streamOpenAI(messages) {
+async function* streamOpenAI(messages, signal) {
   const providerId = settings.provider;
   const provider = PROVIDERS[providerId];
   const url = (providerId === "local" || providerId === "hyperspace")
@@ -828,7 +829,8 @@ async function* streamOpenAI(messages) {
   const response = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({ model, messages, stream: true, max_tokens: 2048 })
+    body: JSON.stringify({ model, messages, stream: true, max_tokens: 2048 }),
+    signal
   });
 
   if (!response.ok) {
@@ -866,7 +868,7 @@ function normalizeAnthropicMessages(messages) {
   return merged;
 }
 
-async function* streamAnthropic(messages, includeCtx = false, webContext = null) {
+async function* streamAnthropic(messages, includeCtx = false, webContext = null, signal) {
   const systemPrompt = buildSystemPrompt(includeCtx, webContext);
   const userMessages = normalizeAnthropicMessages(messages);
 
@@ -884,7 +886,8 @@ async function* streamAnthropic(messages, includeCtx = false, webContext = null)
       system: systemPrompt,
       messages: userMessages,
       stream: true
-    })
+    }),
+    signal
   });
 
   if (!response.ok) {
@@ -905,7 +908,7 @@ async function* streamAnthropic(messages, includeCtx = false, webContext = null)
 }
 
 // ── Gemini REST ───────────────────────────────────────────────
-async function callGemini(messages, includeCtx = false, webContext = null) {
+async function callGemini(messages, includeCtx = false, webContext = null, signal) {
   const systemPrompt = buildSystemPrompt(includeCtx, webContext);
   const model = settings.model;
   const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
@@ -926,7 +929,8 @@ async function callGemini(messages, includeCtx = false, webContext = null) {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
+    signal
   });
 
   if (!response.ok) {
@@ -1044,6 +1048,22 @@ async function runWebSearchFallback({ providerId, history, text, includeCtx, ful
   }
 }
 
+// ── Stop Button Helpers ───────────────────────────────────────
+function enterStopMode() {
+  const btn = document.getElementById("send-btn");
+  btn.classList.add("stop-mode");
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="white" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="10" height="10" rx="2"/></svg>`;
+  btn.setAttribute("aria-label", "Abbrechen");
+}
+
+function exitStopMode() {
+  const btn = document.getElementById("send-btn");
+  btn.classList.remove("stop-mode");
+  btn.setAttribute("aria-label", "Senden");
+  btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 8h12M9 3l5 5-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
 // ── Send Message ──────────────────────────────────────────────
 async function sendMessage() {
   if (isStreaming) return;
@@ -1053,9 +1073,10 @@ async function sendMessage() {
   if (!text) return;
 
   isStreaming = true;
+  abortController = new AbortController();
+  enterStopMode();
   input.value = "";
   input.style.height = "auto";
-  document.getElementById("send-btn").disabled = true;
 
   // Show model tag if model changed since last message
   const currentModel = settings.model || settings.customModel || "?";
@@ -1070,6 +1091,8 @@ async function sendMessage() {
   // Guard: no API key (hyperspace and local don't need one)
   if (!settings.apiKey && settings.provider !== "local" && settings.provider !== "hyperspace") {
     isStreaming = false;
+    abortController = null;
+    exitStopMode();
     document.getElementById("send-btn").disabled = input.value.trim().length === 0;
     renderMessage("ai", "Bitte zuerst einen API-Key in den Einstellungen hinterlegen.");
     return;
@@ -1120,15 +1143,15 @@ async function sendMessage() {
     }
 
     if (providerId === "gemini") {
-      fullResponse = await callGemini(messages, includeCtx);
+      fullResponse = await callGemini(messages, includeCtx, null, abortController.signal);
       typingEl.classList.add("hidden");
       typingEl.setAttribute("aria-hidden", "true");
       aiBubble = renderMessage("ai", fullResponse);
       renderKatex(aiBubble);
     } else {
       const generator = providerId === "anthropic"
-        ? streamAnthropic(messages, includeCtx)
-        : streamOpenAI(messages);
+        ? streamAnthropic(messages, includeCtx, null, abortController.signal)
+        : streamOpenAI(messages, abortController.signal);
 
       let firstToken = true;
       const flusher = makeStreamFlusher(() => aiBubble, () => fullResponse);
@@ -1162,9 +1185,19 @@ async function sendMessage() {
   } catch (err) {
     typingEl.classList.add("hidden");
     typingEl.setAttribute("aria-hidden", "true");
-    renderMessage("ai", `Fehler: ${err.message}`);
+    if (err.name !== "AbortError") {
+      renderMessage("ai", `Fehler: ${err.message}`);
+    }
+    // On abort: save partial response if we have one
+    if (err.name === "AbortError" && aiBubble && fullResponse) {
+      flusher?.finalize();
+      chatHistory.push({ role: "assistant", content: fullResponse });
+      await saveHistory(chatHistory);
+    }
   } finally {
     isStreaming = false;
+    abortController = null;
+    exitStopMode();
     // Re-enable only if there's something to send — input is empty after a
     // successful send, so leaving it disabled until the user types is correct.
     document.getElementById("send-btn").disabled = input.value.trim().length === 0;
@@ -1268,7 +1301,13 @@ async function init() {
 
   if (pageContextMode !== "off") fetchPageContent();
 
-  document.getElementById("send-btn").addEventListener("click", sendMessage);
+  document.getElementById("send-btn").addEventListener("click", () => {
+    if (isStreaming && abortController) {
+      abortController.abort();
+    } else {
+      sendMessage();
+    }
+  });
   document.getElementById("settings-btn").addEventListener("click", openSettings);
   document.getElementById("back-btn").addEventListener("click", closeSettings);
   document.getElementById("save-settings-btn").addEventListener("click", saveSettingsFromUI);

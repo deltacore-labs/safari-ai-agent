@@ -717,3 +717,11 @@ html, body {
     overflow-y: hidden;
   }
 }
+
+/* ── Stop Button State ───────────────────────────────────────── */
+.send-btn.stop-mode {
+  background: #ff3b30;
+}
+.send-btn.stop-mode:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
