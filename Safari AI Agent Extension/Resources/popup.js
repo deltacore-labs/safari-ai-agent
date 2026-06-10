@@ -49,6 +49,7 @@ const DEFAULT_SETTINGS = {
 // ── Module State ──────────────────────────────────────────────
 let settings = { ...DEFAULT_SETTINGS };
 let chatHistory = [];
+let activeConvId = null;
 let isStreaming = false;
 let abortController = null;
 let currentPageContext = null;
@@ -63,6 +64,10 @@ async function loadSettings() {
 
 async function saveSettings(s) {
   await browser.storage.local.set({ settings: s });
+}
+
+function generateConvId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
 
 // ── Claude Config Auto-Discovery ──────────────────────────────
@@ -85,45 +90,76 @@ async function loadAIConfig() {
   return { autoDetected: false };
 }
 
-async function loadHistory() {
-  const result = await browser.storage.local.get(["chatHistory"]);
-  const history = Array.isArray(result.chatHistory) ? result.chatHistory : [];
-  // Coerce content to string + cap at 10k chars. Old/corrupt entries
-  // (undefined, numbers, objects from earlier schemas) become empty strings
-  // rather than throwing on .length / .slice.
-  return history
+async function loadConversation(id) {
+  const result = await browser.storage.local.get([`conv_${id}`]);
+  const msgs = Array.isArray(result[`conv_${id}`]) ? result[`conv_${id}`] : [];
+  return msgs
     .filter(m => m && (m.role === "user" || m.role === "assistant"))
     .map(m => {
       const content = typeof m.content === "string" ? m.content : String(m.content ?? "");
-      return {
-        ...m,
-        content: content.length > 10000 ? content.slice(0, 10000) + "…" : content
-      };
+      return { ...m, content: content.length > 10000 ? content.slice(0, 10000) + "…" : content };
     });
 }
 
-async function saveHistory(h) {
-  const MAX_BYTES = 512 * 1024; // 512KB limit for chat history
-  let trimmed = h.length > 100 ? h.slice(h.length - 100) : [...h];
+async function loadConversationsIndex() {
+  const result = await browser.storage.local.get(["conversations_index"]);
+  return Array.isArray(result.conversations_index) ? result.conversations_index : [];
+}
 
-  // Trim oldest messages until serialized size fits
+async function saveConversationsIndex(index) {
+  await browser.storage.local.set({ conversations_index: index });
+}
+
+async function saveConversation(id, messages) {
+  const MAX_BYTES = 512 * 1024;
+  let trimmed = messages.length > 100 ? messages.slice(messages.length - 100) : [...messages];
+
   while (trimmed.length > 0) {
     const bytes = new TextEncoder().encode(JSON.stringify(trimmed)).length;
     if (bytes <= MAX_BYTES) break;
-    trimmed = trimmed.slice(Math.ceil(trimmed.length * 0.2)); // drop oldest 20%
+    trimmed = trimmed.slice(Math.ceil(trimmed.length * 0.2));
   }
 
   try {
-    await browser.storage.local.set({ chatHistory: trimmed });
+    await browser.storage.local.set({ [`conv_${id}`]: trimmed });
   } catch {
-    // Storage still full even after trimming — save only last 2 exchanges (4 messages)
     const minimal = trimmed.slice(-4);
-    try {
-      await browser.storage.local.set({ chatHistory: minimal });
-    } catch {
-      // Give up persisting — keep in memory only
-    }
+    await browser.storage.local.set({ [`conv_${id}`]: minimal });
   }
+}
+
+async function updateConversationIndex(id, firstUserMessage) {
+  const MAX_CONVERSATIONS = 50;
+  let index = await loadConversationsIndex();
+
+  const title = firstUserMessage
+    ? firstUserMessage.slice(0, 60) + (firstUserMessage.length > 60 ? "…" : "")
+    : "Neue Unterhaltung";
+
+  const existing = index.findIndex(c => c.id === id);
+  const entry = { id, title, updatedAt: Date.now() };
+
+  if (existing >= 0) {
+    index[existing] = entry;
+  } else {
+    index.unshift(entry);
+  }
+
+  // Sort newest first and enforce max limit
+  index.sort((a, b) => b.updatedAt - a.updatedAt);
+  const removed = index.splice(MAX_CONVERSATIONS);
+
+  // Delete storage for removed conversations
+  for (const conv of removed) {
+    try { await browser.storage.local.remove(`conv_${conv.id}`); } catch { /* ignore */ }
+  }
+
+  await saveConversationsIndex(index);
+}
+
+async function setActiveConvId(id) {
+  activeConvId = id;
+  await browser.storage.local.set({ active_conv_id: id });
 }
 
 // ── Settings UI ───────────────────────────────────────────────
