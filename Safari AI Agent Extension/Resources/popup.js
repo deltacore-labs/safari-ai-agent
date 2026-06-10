@@ -65,6 +65,32 @@ async function saveSettings(s) {
   await browser.storage.local.set({ settings: s });
 }
 
+// ── Claude Config Auto-Discovery ──────────────────────────────
+async function loadAIConfig() {
+  try {
+    const response = await browser.runtime.sendMessage({ type: "getAIConfig" });
+    if (response?.source === "claude-config" && response.apiKey) {
+      return {
+        apiKey:       response.apiKey,
+        baseUrl:      response.baseUrl,
+        model:        response.model,
+        autoDetected: true
+      };
+    }
+  } catch {
+    // Native messaging fehlgeschlagen — Fallback zu gespeicherten Werten
+  }
+
+  // Fallback: manuell gespeicherte Werte
+  const stored = await loadSettings();
+  return {
+    apiKey:       stored.apiKey  ?? "",
+    baseUrl:      stored.baseUrl ?? "https://api.anthropic.com/v1/messages",
+    model:        stored.model   ?? "claude-sonnet-latest",
+    autoDetected: false
+  };
+}
+
 async function loadHistory() {
   const result = await browser.storage.local.get(["chatHistory"]);
   const history = Array.isArray(result.chatHistory) ? result.chatHistory : [];
@@ -200,7 +226,28 @@ function loadSettingsIntoUI() {
   document.getElementById("base-url-input").value = settings.provider === "hyperspace" ? defaultBaseUrl : (settings.baseUrl || defaultBaseUrl);
   document.getElementById("system-prompt-input").value = settings.systemPrompt;
   updateBaseUrlVisibility(settings.provider);
-  populateModelDropdown(settings.provider);  // async, fire-and-forget — handles model + custom input restore internally
+  populateModelDropdown(settings.provider);
+
+  // Badge + readonly Felder wenn auto-detected
+  const badge = document.getElementById("claude-config-badge");
+  const apiKeyInput = document.getElementById("api-key-input");
+  const baseUrlInput = document.getElementById("base-url-input");
+  const providerSelect = document.getElementById("provider-select");
+  const modelSelect = document.getElementById("model-select");
+
+  if (settings._autoDetected) {
+    badge.style.display = "flex";
+    apiKeyInput.readOnly = true;
+    baseUrlInput.readOnly = true;
+    providerSelect.disabled = true;
+    modelSelect.disabled = true;
+  } else {
+    badge.style.display = "none";
+    apiKeyInput.readOnly = false;
+    baseUrlInput.readOnly = false;
+    providerSelect.disabled = false;
+    modelSelect.disabled = false;
+  }
 }
 
 async function saveSettingsFromUI() {
@@ -1348,7 +1395,20 @@ function refreshModels() {
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
+  const aiConfig = await loadAIConfig();
   settings = await loadSettings();
+
+  // Auto-detected Werte überschreiben manuelle (auto hat Vorrang)
+  if (aiConfig.autoDetected) {
+    settings.apiKey = aiConfig.apiKey;
+    settings.baseUrl = aiConfig.baseUrl;
+    settings.model = aiConfig.model;
+    settings.provider = "anthropic"; // ~/.claude/ ist immer Anthropic
+  }
+
+  // Badge-Status in UI-State merken
+  settings._autoDetected = aiConfig.autoDetected;
+
   const stored = await browser.storage.local.get(["pageContextMode"]);
   const validModes = ["auto", "on", "off"];
   pageContextMode = validModes.includes(stored.pageContextMode) ? stored.pageContextMode : "auto";
