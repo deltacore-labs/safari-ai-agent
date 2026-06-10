@@ -231,6 +231,7 @@ function closeHistoryDropdown() {
 }
 
 async function switchToConversation(id) {
+  if (isStreaming) return;
   closeHistoryDropdown();
   await setActiveConvId(id);
   chatHistory = await loadConversation(id);
@@ -1445,6 +1446,7 @@ async function sendMessage() {
 
 // ── Panel Navigation ──────────────────────────────────────────
 function openSettings() {
+  closeHistoryDropdown();
   document.getElementById("chat-panel").classList.add("slide-left");
   document.getElementById("settings-panel").classList.add("active");
   loadSettingsIntoUI();
@@ -1500,6 +1502,7 @@ async function clearHistory() {
     let index = await loadConversationsIndex();
     index = index.filter(c => c.id !== activeConvId);
     await saveConversationsIndex(index);
+    await setActiveConvId(generateConvId()); // fresh ID so next send is a new conv
   } catch { /* ignore */ }
 }
 
@@ -1588,6 +1591,7 @@ async function init() {
 
   document.getElementById("history-btn").addEventListener("click", (e) => {
     e.stopPropagation();
+    if (isStreaming) return;
     const dropdown = document.getElementById("history-dropdown");
     if (dropdown.classList.contains("hidden")) {
       openHistoryDropdown();
