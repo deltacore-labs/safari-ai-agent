@@ -428,6 +428,8 @@ function applyDarkMode(enabled) {
     sun.style.display = enabled ? "block" : "none";
     moon.style.display = enabled ? "none" : "block";
   }
+  const btn = document.getElementById("darkmode-btn");
+  if (btn) btn.setAttribute("aria-pressed", String(enabled));
 }
 
 async function toggleDarkMode() {
@@ -1568,8 +1570,6 @@ async function init() {
   const validModes = ["auto", "on", "off"];
   pageContextMode = validModes.includes(stored.pageContextMode) ? stored.pageContextMode : "auto";
   updatePageCtrlUI();
-  const dmResult = await browser.storage.local.get(["darkMode"]);
-  applyDarkMode(dmResult.darkMode === true);
   await migrateOldChatHistory();
 
   const storedId = await browser.storage.local.get(["active_conv_id"]);
@@ -1586,6 +1586,8 @@ async function init() {
 
   chatHistory = await loadConversation(activeConvId);
   applyTheme(settings.provider, settings.model);
+  const dmResult = await browser.storage.local.get(["darkMode"]);
+  applyDarkMode(dmResult.darkMode === true);
 
   if (chatHistory.length === 0) {
     renderEmptyState();
