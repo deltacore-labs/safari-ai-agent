@@ -123,8 +123,10 @@ async function saveConversation(id, messages) {
   try {
     await browser.storage.local.set({ [`conv_${id}`]: trimmed });
   } catch {
-    const minimal = trimmed.slice(-4);
-    await browser.storage.local.set({ [`conv_${id}`]: minimal });
+    try {
+      const minimal = trimmed.slice(-4);
+      await browser.storage.local.set({ [`conv_${id}`]: minimal });
+    } catch { /* ignore — storage full, give up */ }
   }
 }
 
@@ -137,7 +139,9 @@ async function updateConversationIndex(id, firstUserMessage) {
     : "Neue Unterhaltung";
 
   const existing = index.findIndex(c => c.id === id);
-  const entry = { id, title, updatedAt: Date.now() };
+  const entry = existing >= 0
+    ? { ...index[existing], updatedAt: Date.now() }
+    : { id, title, updatedAt: Date.now() };
 
   if (existing >= 0) {
     index[existing] = entry;
