@@ -1210,7 +1210,7 @@ async function startNewConversation() {
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
   currentPageContext = null;
-  fetchPageContent();
+  if (pageContextMode !== "off") fetchPageContent();
   // Clear storage — best effort
   try { await browser.storage.local.remove("chatHistory"); } catch { /* ignore */ }
 }
@@ -1238,7 +1238,7 @@ async function init() {
     );
   }
 
-  fetchPageContent();
+  if (pageContextMode !== "off") fetchPageContent();
 
   document.getElementById("send-btn").addEventListener("click", sendMessage);
   document.getElementById("settings-btn").addEventListener("click", openSettings);
