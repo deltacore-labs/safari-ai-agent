@@ -1123,6 +1123,7 @@ async function sendMessage() {
 
   let aiBubble = null;
   let fullResponse = "";
+  let flusher = null;
   let snapshotForWebSearch = null;
 
   try {
@@ -1154,7 +1155,7 @@ async function sendMessage() {
         : streamOpenAI(messages, abortController.signal);
 
       let firstToken = true;
-      const flusher = makeStreamFlusher(() => aiBubble, () => fullResponse);
+      flusher = makeStreamFlusher(() => aiBubble, () => fullResponse);
       for await (const token of generator) {
         if (firstToken) {
           typingEl.classList.add("hidden");
