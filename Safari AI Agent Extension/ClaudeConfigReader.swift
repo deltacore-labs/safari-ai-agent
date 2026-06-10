@@ -2,7 +2,7 @@ import Foundation
 
 struct ClaudeConfig {
     let apiKey: String
-    let baseUrl: String
+    let baseURL: String
     let model: String
 }
 
@@ -14,15 +14,15 @@ struct ClaudeConfigReader {
 
         guard let data = try? Data(contentsOf: path),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let env = json["env"] as? [String: String],
-              let apiKey = env["ANTHROPIC_AUTH_TOKEN"],
+              let env = json["env"] as? [String: Any],
+              let apiKey = env["ANTHROPIC_AUTH_TOKEN"] as? String,
               !apiKey.isEmpty
         else { return nil }
 
         return ClaudeConfig(
             apiKey: apiKey,
-            baseUrl: env["ANTHROPIC_BASE_URL"] ?? "https://api.anthropic.com/v1/messages",
-            model: env["ANTHROPIC_MODEL"] ?? "claude-sonnet-latest"
+            baseURL: env["ANTHROPIC_BASE_URL"] as? String ?? "https://api.anthropic.com/v1/messages",
+            model: env["ANTHROPIC_MODEL"] as? String ?? "claude-sonnet-latest"
         )
     }
 }
