@@ -249,9 +249,12 @@ async function renderHistoryDropdown() {
 
 async function togglePin(id) {
   let index = await loadConversationsIndex();
-  const entry = index.find(c => c.id === id);
-  if (!entry) return;
-  entry.pinned = !entry.pinned;
+  index = index.map(c => c.id === id ? { ...c, pinned: !c.pinned } : c);
+  index.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.updatedAt - a.updatedAt;
+  });
   await saveConversationsIndex(index);
   await renderHistoryDropdown();
 }
