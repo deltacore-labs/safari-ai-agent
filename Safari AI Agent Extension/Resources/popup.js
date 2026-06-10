@@ -1985,6 +1985,24 @@ async function init() {
       if (!dropdown.classList.contains("hidden")) closeHistoryDropdown();
     }
   });
+
+  // Check if launched via context menu
+  const cmResult = await browser.storage.local.get(["contextMenuPrompt"]);
+  if (cmResult.contextMenuPrompt) {
+    await browser.storage.local.remove("contextMenuPrompt");
+    document.getElementById("user-input").value = cmResult.contextMenuPrompt;
+    document.getElementById("send-btn").disabled = false;
+    document.getElementById("user-input").focus();
+  }
+
+  // Listen for context menu messages while popup is open
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "CONTEXT_MENU_TEXT" && msg.prompt) {
+      document.getElementById("user-input").value = msg.prompt;
+      document.getElementById("send-btn").disabled = false;
+      document.getElementById("user-input").focus();
+    }
+  });
 }
 
 document.addEventListener("DOMContentLoaded", init);
