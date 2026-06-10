@@ -467,7 +467,6 @@ function renderQuickReplies(replies, messageRow) {
     });
     container.appendChild(btn);
   }
-  const messages = document.getElementById("messages");
   messageRow.insertAdjacentElement("afterend", container);
   scrollToBottomIfNear();
 }
@@ -1237,9 +1236,8 @@ async function sendMessage() {
       typingEl.classList.add("hidden");
       typingEl.setAttribute("aria-hidden", "true");
       aiBubble = renderMessage("ai", fullResponse);
-      renderKatex(aiBubble);
 
-      // Quick Replies for Gemini
+      // Quick Replies — parse BEFORE KaTeX so re-setting innerHTML doesn't undo KaTeX
       if (aiBubble && fullResponse) {
         const { text: cleanGeminiText, replies: geminiReplies } = parseQuickReplies(fullResponse);
         if (geminiReplies.length > 0) {
@@ -1249,6 +1247,7 @@ async function sendMessage() {
           renderQuickReplies(geminiReplies, aiBubble.closest(".message-row"));
         }
       }
+      renderKatex(aiBubble);
     } else {
       const generator = providerId === "anthropic"
         ? streamAnthropic(messages, includeCtx, null, abortController.signal)
