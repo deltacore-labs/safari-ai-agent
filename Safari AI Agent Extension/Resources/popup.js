@@ -392,6 +392,39 @@ function markdownToHtml(text) {
   return escaped;
 }
 
+function parseQuickReplies(text) {
+  const match = text.match(/\[QUICK_REPLIES:\s*([^\]]+)\]/i);
+  if (!match) return { text, replies: [] };
+  const replies = match[1]
+    .split("|")
+    .map(r => r.trim())
+    .filter(r => r.length > 0)
+    .slice(0, 4);
+  const cleanText = text.replace(match[0], "").trimEnd();
+  return { text: cleanText, replies };
+}
+
+function renderQuickReplies(replies, messageRow) {
+  if (!replies || replies.length === 0) return;
+  const container = document.createElement("div");
+  container.className = "quick-replies";
+  for (const reply of replies) {
+    const btn = document.createElement("button");
+    btn.className = "quick-reply-btn";
+    btn.textContent = reply;
+    btn.addEventListener("click", () => {
+      container.remove();
+      const input = document.getElementById("user-input");
+      input.value = reply;
+      sendMessage();
+    });
+    container.appendChild(btn);
+  }
+  const messages = document.getElementById("messages");
+  messageRow.insertAdjacentElement("afterend", container);
+  scrollToBottomIfNear();
+}
+
 // ── Provider Avatar ───────────────────────────────────────────
 function getProviderAvatar() {
   const provider = settings.provider;
@@ -772,9 +805,11 @@ function buildSystemPrompt(includePageContext = false, webContext = null) {
   const base = settings.systemPrompt?.trim() ||
     "Du bist ein hilfreicher KI-Assistent.";
 
+  const quickRepliesInstruction = "Wenn du dem Nutzer mehrere Optionen anbieten möchtest, kannst du am Ende deiner Antwort bis zu 4 klickbare Vorschläge mit folgendem Format hinzufügen: [QUICK_REPLIES: Option A | Option B | Option C]";
+
   const now = new Date();
   const dateStr = now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  let prompt = `${base}\n\nAktuelles Datum: ${dateStr}.`;
+  let prompt = `${base}\n\n${quickRepliesInstruction}\n\nAktuelles Datum: ${dateStr}.`;
 
   if (webContext) {
     prompt += `\n\nAktuelle Informationen aus dem Internet (via Websuche):\n<webcontext>\n${webContext}\n</webcontext>\nNutze diese Informationen bevorzugt gegenüber deinem Trainingswissen.`;
@@ -1156,6 +1191,17 @@ async function sendMessage() {
       typingEl.setAttribute("aria-hidden", "true");
       aiBubble = renderMessage("ai", fullResponse);
       renderKatex(aiBubble);
+
+      // Quick Replies for Gemini
+      if (aiBubble && fullResponse) {
+        const { text: cleanGeminiText, replies: geminiReplies } = parseQuickReplies(fullResponse);
+        if (geminiReplies.length > 0) {
+          fullResponse = cleanGeminiText;
+          aiBubble.innerHTML = markdownToHtml(cleanGeminiText);
+          aiBubble._rawText = cleanGeminiText;
+          renderQuickReplies(geminiReplies, aiBubble.closest(".message-row"));
+        }
+      }
     } else {
       const generator = providerId === "anthropic"
         ? streamAnthropic(messages, includeCtx, null, abortController.signal)
@@ -1175,6 +1221,17 @@ async function sendMessage() {
       }
       flusher.finalize();
       requestAnimationFrame(() => renderKatex(aiBubble));
+
+      // Quick Replies — parse from full response, strip marker from displayed bubble
+      if (aiBubble && fullResponse) {
+        const { text: cleanText, replies } = parseQuickReplies(fullResponse);
+        if (replies.length > 0) {
+          fullResponse = cleanText;
+          aiBubble.innerHTML = markdownToHtml(cleanText);
+          aiBubble._rawText = cleanText;
+          renderQuickReplies(replies, aiBubble.closest(".message-row"));
+        }
+      }
     }
 
     const historyBeforeFirstReply = [...chatHistory]; // snapshot before first reply
