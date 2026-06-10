@@ -964,6 +964,19 @@ function makeStreamFlusher(getBubble, getResponse) {
   return { schedule, finalize };
 }
 
+function renderKatex(bubble) {
+  if (!bubble || typeof window.renderMathInElement !== "function") return;
+  try {
+    window.renderMathInElement(bubble, {
+      delimiters: [
+        { left: "$$", right: "$$", display: true },
+        { left: "$",  right: "$",  display: false }
+      ],
+      throwOnError: false
+    });
+  } catch { /* ignore — fehlerhafte Formeln bleiben als Plain-Text */ }
+}
+
 // ── Send Message ──────────────────────────────────────────────
 async function sendMessage() {
   if (isStreaming) return;
@@ -1043,6 +1056,7 @@ async function sendMessage() {
       fullResponse = await callGemini(messages, includeCtx);
       typingEl.classList.add("hidden");
       aiBubble = renderMessage("ai", fullResponse);
+      renderKatex(aiBubble);
     } else {
       const generator = providerId === "anthropic"
         ? streamAnthropic(messages, includeCtx)
@@ -1060,6 +1074,7 @@ async function sendMessage() {
         flusher.schedule();
       }
       flusher.finalize();
+      renderKatex(aiBubble);
     }
 
     const historyBeforeFirstReply = [...chatHistory]; // snapshot before first reply
@@ -1094,6 +1109,7 @@ async function sendMessage() {
         if (providerId === "gemini") {
           webResponse = await callGemini(webMessages, includeCtx, webContext);
           webBubble = renderMessage("ai", webResponse);
+          renderKatex(webBubble);
         } else {
           const webGenerator = providerId === "anthropic"
             ? streamAnthropic(webMessages, includeCtx, webContext)
@@ -1110,6 +1126,7 @@ async function sendMessage() {
             webFlusher.schedule();
           }
           webFlusher.finalize();
+          renderKatex(webBubble);
         }
 
         if (webResponse) {
