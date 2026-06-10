@@ -1667,7 +1667,7 @@ async function exportConversations() {
   a.href = url;
   a.download = `ai-agent-export-${today}.json`;
   a.click();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function importConversations(file) {
@@ -1708,7 +1708,15 @@ async function importConversations(file) {
     if (!a.pinned && b.pinned) return 1;
     return b.updatedAt - a.updatedAt;
   });
-  await saveConversationsIndex(existingIndex);
+  // Enforce 50-conversation cap (pinned entries exempt)
+  const MAX_CONVERSATIONS = 50;
+  const pinnedEntries   = existingIndex.filter(c => c.pinned);
+  const unpinnedEntries = existingIndex.filter(c => !c.pinned);
+  const removedEntries  = unpinnedEntries.splice(MAX_CONVERSATIONS);
+  for (const conv of removedEntries) {
+    try { await browser.storage.local.remove(`conv_${conv.id}`); } catch { /* ignore */ }
+  }
+  await saveConversationsIndex([...pinnedEntries, ...unpinnedEntries]);
 
   alert(`${imported} Unterhaltung${imported !== 1 ? "en" : ""} importiert.`);
 }
