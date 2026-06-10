@@ -977,6 +977,73 @@ function renderKatex(bubble) {
   } catch { /* ignore — fehlerhafte Formeln bleiben als Plain-Text */ }
 }
 
+// ── Web-Search Fallback ───────────────────────────────────────
+// Runs after sendMessage()'s finally block so the send button is re-enabled
+// immediately after the main AI response. Fire-and-forget from sendMessage.
+async function runWebSearchFallback({ providerId, history, text, includeCtx, fullResponse }) {
+  // Only supported on hyperspace / local
+  if (providerId !== "hyperspace" && providerId !== "local") return;
+  if (!fullResponse) return;
+
+  const isUncertain = await uncertaintyCheck(fullResponse);
+  if (!isUncertain) return;
+
+  const typingEl = document.getElementById("typing-indicator");
+  renderContextModeNotice("Websuche wird durchgeführt…");
+  typingEl.classList.remove("hidden");
+  typingEl.removeAttribute("aria-hidden");
+  scrollToBottom();
+
+  const webContext = await fetchWebContext(text);
+
+  typingEl.classList.add("hidden");
+  typingEl.setAttribute("aria-hidden", "true");
+
+  if (!webContext) return;
+
+  let webMessages;
+  const webSystemPrompt = buildSystemPrompt(includeCtx, webContext);
+  if (providerId === "anthropic" || providerId === "gemini") {
+    webMessages = history.map(m => ({ role: m.role, content: m.content }));
+  } else {
+    webMessages = [
+      { role: "system", content: webSystemPrompt },
+      ...history.map(m => ({ role: m.role, content: m.content }))
+    ];
+  }
+
+  let webBubble = null;
+  let webResponse = "";
+
+  if (providerId === "gemini") {
+    webResponse = await callGemini(webMessages, includeCtx, webContext);
+    webBubble = renderMessage("ai", webResponse);
+    renderKatex(webBubble);
+  } else {
+    const webGenerator = providerId === "anthropic"
+      ? streamAnthropic(webMessages, includeCtx, webContext)
+      : streamOpenAI(webMessages);
+
+    let firstWebToken = true;
+    const webFlusher = makeStreamFlusher(() => webBubble, () => webResponse);
+    for await (const token of webGenerator) {
+      if (firstWebToken) {
+        webBubble = renderMessage("ai", "");
+        firstWebToken = false;
+      }
+      webResponse += token;
+      webFlusher.schedule();
+    }
+    webFlusher.finalize();
+    requestAnimationFrame(() => renderKatex(webBubble));
+  }
+
+  if (webResponse) {
+    chatHistory.push({ role: "assistant", content: webResponse });
+    await saveHistory(chatHistory);
+  }
+}
+
 // ── Send Message ──────────────────────────────────────────────
 async function sendMessage() {
   if (isStreaming) return;
@@ -1033,6 +1100,7 @@ async function sendMessage() {
 
   let aiBubble = null;
   let fullResponse = "";
+  let snapshotForWebSearch = null;
 
   try {
     const includeCtx = pageContextMode === "on"
@@ -1082,63 +1150,14 @@ async function sendMessage() {
     chatHistory.push({ role: "assistant", content: fullResponse });
     await saveHistory(chatHistory);
 
-    // Web search fallback — only runs once per user message
-    const supportsWebSearch = settings.provider === "hyperspace" || settings.provider === "local";
-    if (supportsWebSearch && fullResponse && await uncertaintyCheck(fullResponse)) {
-      renderContextModeNotice("Websuche wird durchgeführt…");
-      typingEl.classList.remove("hidden");
-      typingEl.removeAttribute("aria-hidden");
-      scrollToBottom();
-
-      const webContext = await fetchWebContext(text);
-
-      typingEl.classList.add("hidden");
-      typingEl.setAttribute("aria-hidden", "true");
-
-      if (webContext) {
-        let webMessages;
-        const webSystemPrompt = buildSystemPrompt(includeCtx, webContext);
-        if (providerId === "anthropic" || providerId === "gemini") {
-          webMessages = historyBeforeFirstReply.map(m => ({ role: m.role, content: m.content }));
-        } else {
-          webMessages = [
-            { role: "system", content: webSystemPrompt },
-            ...historyBeforeFirstReply.map(m => ({ role: m.role, content: m.content }))
-          ];
-        }
-
-        let webBubble = null;
-        let webResponse = "";
-
-        if (providerId === "gemini") {
-          webResponse = await callGemini(webMessages, includeCtx, webContext);
-          webBubble = renderMessage("ai", webResponse);
-          renderKatex(webBubble);
-        } else {
-          const webGenerator = providerId === "anthropic"
-            ? streamAnthropic(webMessages, includeCtx, webContext)
-            : streamOpenAI(webMessages);
-
-          let firstWebToken = true;
-          const webFlusher = makeStreamFlusher(() => webBubble, () => webResponse);
-          for await (const token of webGenerator) {
-            if (firstWebToken) {
-              webBubble = renderMessage("ai", "");
-              firstWebToken = false;
-            }
-            webResponse += token;
-            webFlusher.schedule();
-          }
-          webFlusher.finalize();
-          requestAnimationFrame(() => renderKatex(webBubble));
-        }
-
-        if (webResponse) {
-          chatHistory.push({ role: "assistant", content: webResponse });
-          await saveHistory(chatHistory);
-        }
-      }
-    }
+    // Snapshot for web-search fallback — runs after finally (outside try block)
+    snapshotForWebSearch = {
+      providerId,
+      history: historyBeforeFirstReply,
+      text,
+      includeCtx,
+      fullResponse
+    };
 
   } catch (err) {
     typingEl.classList.add("hidden");
@@ -1150,6 +1169,11 @@ async function sendMessage() {
     // successful send, so leaving it disabled until the user types is correct.
     document.getElementById("send-btn").disabled = input.value.trim().length === 0;
     input.focus();
+  }
+
+  // Web-search fallback runs after button is re-enabled — fire and forget
+  if (snapshotForWebSearch?.fullResponse) {
+    runWebSearchFallback(snapshotForWebSearch);
   }
 }
 
