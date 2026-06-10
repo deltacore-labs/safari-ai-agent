@@ -1074,7 +1074,7 @@ async function sendMessage() {
         flusher.schedule();
       }
       flusher.finalize();
-      renderKatex(aiBubble);
+      requestAnimationFrame(() => renderKatex(aiBubble));
     }
 
     const historyBeforeFirstReply = [...chatHistory]; // snapshot before first reply
@@ -1126,7 +1126,7 @@ async function sendMessage() {
             webFlusher.schedule();
           }
           webFlusher.finalize();
-          renderKatex(webBubble);
+          requestAnimationFrame(() => renderKatex(webBubble));
         }
 
         if (webResponse) {
