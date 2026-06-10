@@ -946,8 +946,9 @@ function makeStreamFlusher(getBubble, getResponse) {
     const bubble = getBubble();
     if (!bubble) return;
     requestAnimationFrame(() => {
-      bubble.innerHTML = markdownToHtml(getResponse());
-      bubble._rawText = getResponse();
+      const text = getResponse();
+      bubble.innerHTML = markdownToHtml(text);
+      bubble._rawText = text;
       const list = document.getElementById("messages");
       const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
       if (nearBottom) list.scrollTop = list.scrollHeight;
