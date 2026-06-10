@@ -10,7 +10,7 @@ const PROVIDERS = {
   anthropic: {
     name: "Anthropic",
     baseUrl: "https://api.anthropic.com/v1/messages",
-    models: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
+    models: ["claude-sonnet-latest", "claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5-20251001"],
     streaming: true,
     format: "anthropic"
   },
@@ -81,14 +81,8 @@ async function loadAIConfig() {
     // Native messaging fehlgeschlagen — Fallback zu gespeicherten Werten
   }
 
-  // Fallback: manuell gespeicherte Werte
-  const stored = await loadSettings();
-  return {
-    apiKey:       stored.apiKey  ?? "",
-    baseUrl:      stored.baseUrl ?? "https://api.anthropic.com/v1/messages",
-    model:        stored.model   ?? "claude-sonnet-latest",
-    autoDetected: false
-  };
+  // Fallback: init() ruft loadSettings() separat auf
+  return { autoDetected: false };
 }
 
 async function loadHistory() {
@@ -954,7 +948,7 @@ async function* streamAnthropic(messages, includeCtx = false, webContext = null,
   const systemPrompt = buildSystemPrompt(includeCtx, webContext);
   const userMessages = normalizeAnthropicMessages(messages);
 
-  const response = await fetch(PROVIDERS.anthropic.baseUrl, {
+  const response = await fetch(settings.baseUrl || PROVIDERS.anthropic.baseUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

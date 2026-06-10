@@ -8,8 +8,7 @@ struct ClaudeConfig {
 
 struct ClaudeConfigReader {
     static func read() -> ClaudeConfig? {
-        let path = FileManager.default
-            .homeDirectoryForCurrentUser
+        let path = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent(".claude/settings.json")
 
         guard let data = try? Data(contentsOf: path),
