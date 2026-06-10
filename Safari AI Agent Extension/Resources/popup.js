@@ -878,12 +878,19 @@ async function* streamAnthropic(messages, includeCtx = false, webContext = null,
       "Content-Type": "application/json",
       "x-api-key": settings.apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-beta": "prompt-caching-2024-07-31",
       "anthropic-dangerous-allow-browser": "true"
     },
     body: JSON.stringify({
       model: settings.model,
       max_tokens: 2048,
-      system: systemPrompt,
+      system: [
+        {
+          type: "text",
+          text: systemPrompt,
+          cache_control: { type: "ephemeral" }
+        }
+      ],
       messages: userMessages,
       stream: true
     }),
