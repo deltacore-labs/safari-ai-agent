@@ -185,6 +185,68 @@ async function migrateOldChatHistory() {
   await browser.storage.local.remove("chatHistory");
 }
 
+function formatRelativeDate(timestamp) {
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Heute";
+  if (diffDays === 1) return "Gestern";
+  if (diffDays < 7) return `Vor ${diffDays} Tagen`;
+  if (diffDays < 30) return `Vor ${Math.floor(diffDays / 7)} Woche${Math.floor(diffDays / 7) > 1 ? "n" : ""}`;
+  return `Vor ${Math.floor(diffDays / 30)} Monat${Math.floor(diffDays / 30) > 1 ? "en" : ""}`;
+}
+
+async function renderHistoryDropdown() {
+  const index = await loadConversationsIndex();
+  const list = document.getElementById("history-list");
+  list.innerHTML = "";
+
+  for (const conv of index) {
+    const item = document.createElement("div");
+    item.className = "history-item" + (conv.id === activeConvId ? " active" : "");
+    item.setAttribute("role", "option");
+    item.dataset.convId = conv.id;
+
+    const titleEl = document.createElement("div");
+    titleEl.className = "history-item-title";
+    titleEl.textContent = conv.title || "Unterhaltung";
+
+    const dateEl = document.createElement("div");
+    dateEl.className = "history-item-date";
+    dateEl.textContent = formatRelativeDate(conv.updatedAt);
+
+    item.appendChild(titleEl);
+    item.appendChild(dateEl);
+    list.appendChild(item);
+  }
+}
+
+async function openHistoryDropdown() {
+  await renderHistoryDropdown();
+  document.getElementById("history-dropdown").classList.remove("hidden");
+}
+
+function closeHistoryDropdown() {
+  document.getElementById("history-dropdown").classList.add("hidden");
+}
+
+async function switchToConversation(id) {
+  closeHistoryDropdown();
+  await setActiveConvId(id);
+  chatHistory = await loadConversation(id);
+  lastDisplayedModel = null;
+  document.getElementById("messages").innerHTML = "";
+  if (chatHistory.length === 0) {
+    renderEmptyState();
+  } else {
+    chatHistory.forEach(m =>
+      renderMessage(m.role === "assistant" ? "ai" : "user", m.content)
+    );
+  }
+  currentPageContext = null;
+  if (pageContextMode !== "off") fetchPageContent();
+}
+
 // ── Settings UI ───────────────────────────────────────────────
 async function populateModelDropdown(providerId) {
   const modelSelect = document.getElementById("model-select");
@@ -1523,6 +1585,37 @@ async function init() {
   document.getElementById("user-input").addEventListener("input", autoResizeTextarea);
   document.getElementById("new-chat-btn").addEventListener("click", startNewConversation);
   document.getElementById("refresh-models-btn").addEventListener("click", refreshModels);
+
+  document.getElementById("history-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const dropdown = document.getElementById("history-dropdown");
+    if (dropdown.classList.contains("hidden")) {
+      openHistoryDropdown();
+    } else {
+      closeHistoryDropdown();
+    }
+  });
+
+  document.getElementById("new-conv-btn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    closeHistoryDropdown();
+    startNewConversation();
+  });
+
+  document.getElementById("history-list").addEventListener("click", (e) => {
+    const item = e.target.closest(".history-item");
+    if (!item) return;
+    switchToConversation(item.dataset.convId);
+  });
+
+  document.addEventListener("click", (e) => {
+    const dropdown = document.getElementById("history-dropdown");
+    if (!dropdown.classList.contains("hidden") &&
+        !dropdown.contains(e.target) &&
+        e.target.id !== "history-btn") {
+      closeHistoryDropdown();
+    }
+  });
 
   document.getElementById("page-ctx-control").addEventListener("click", async (e) => {
     const btn = e.target.closest(".page-ctx-btn");
