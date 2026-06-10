@@ -753,3 +753,22 @@ html, body {
   background: var(--color-accent);
   color: white;
 }
+
+/* ── Claude Config Badge ──────────────────────────────────── */
+.claude-config-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 16px 0;
+  padding: 8px 12px;
+  background: rgba(214, 93, 65, 0.1);
+  border: 1px solid rgba(214, 93, 65, 0.25);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #888);
+}
+
+.claude-config-badge svg {
+  color: #d65d41;
+  flex-shrink: 0;
+}
