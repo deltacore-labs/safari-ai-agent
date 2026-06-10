@@ -718,6 +718,71 @@ html, body {
   }
 }
 
+/* ── Forced Dark Mode (manual toggle) ────────────────────────── */
+[data-color-scheme="dark"] {
+  color-scheme: dark;
+  --color-canvas:        #1c1a17;
+  --color-surface-1:     #242220;
+  --color-surface-2:     #2e2b27;
+  --color-ink:           #e8e5e0;
+  --color-ink-muted:     #9c9890;
+  --color-ink-subtle:    #7a7670;
+  --color-ink-tertiary:  #5e5b56;
+  --color-hairline:      #3a3733;
+  --color-hairline-soft: #2e2b27;
+  --color-accent:        #ff6b1a;
+  --color-fin-orange:    #ff6b1a;
+  --color-error:         #ff6b6b;
+}
+[data-color-scheme="dark"][data-theme="anthropic"] {
+  color-scheme: dark;
+  --color-canvas:        #1a1917;
+  --color-surface-1:     #222018;
+  --color-surface-2:     #2b2820;
+  --color-ink:           #e5e1da;
+  --color-ink-muted:     #97948d;
+  --color-ink-subtle:    #767269;
+  --color-ink-tertiary:  #5a5750;
+  --color-hairline:      #383430;
+  --color-hairline-soft: #2b2820;
+  --color-accent:        #d9896a;
+  --color-fin-orange:    #d9896a;
+  --color-error:         #e87070;
+}
+[data-color-scheme="dark"][data-theme="openai"] {
+  color-scheme: dark;
+  --color-canvas:        #171717;
+  --color-surface-1:     #212121;
+  --color-surface-2:     #2a2a2a;
+  --color-ink:           #ececec;
+  --color-ink-muted:     #9a9a9a;
+  --color-ink-subtle:    #767676;
+  --color-ink-tertiary:  #555555;
+  --color-hairline:      #383838;
+  --color-hairline-soft: #2a2a2a;
+  --color-accent:        #19c499;
+  --color-fin-orange:    #19c499;
+  --color-error:         #ff6b6b;
+}
+[data-color-scheme="dark"][data-theme="gemini"] {
+  color-scheme: dark;
+  --color-canvas:        #13141f;
+  --color-surface-1:     #1c1e2e;
+  --color-surface-2:     #23263a;
+  --color-ink:           #e2e4f0;
+  --color-ink-muted:     #8a8da8;
+  --color-ink-subtle:    #686b88;
+  --color-ink-tertiary:  #4e5168;
+  --color-hairline:      #2e3150;
+  --color-hairline-soft: #23263a;
+  --color-accent:        #6ba8ff;
+  --color-fin-orange:    #6ba8ff;
+  --color-error:         #ff6b6b;
+}
+[data-color-scheme="dark"] .settings-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' stroke='%239c9890' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 /* ── Stop Button State ───────────────────────────────────────── */
 .send-btn.stop-mode {
   background: #ff3b30;

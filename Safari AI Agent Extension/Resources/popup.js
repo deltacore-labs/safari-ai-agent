@@ -412,6 +412,30 @@ function applyTheme(providerId, model) {
   document.documentElement.setAttribute("data-theme", theme);
 }
 
+// ── Dark Mode ─────────────────────────────────────────────────
+let darkModeEnabled = false;
+
+function applyDarkMode(enabled) {
+  darkModeEnabled = enabled;
+  if (enabled) {
+    document.documentElement.setAttribute("data-color-scheme", "dark");
+  } else {
+    document.documentElement.removeAttribute("data-color-scheme");
+  }
+  const sun = document.getElementById("darkmode-icon-sun");
+  const moon = document.getElementById("darkmode-icon-moon");
+  if (sun && moon) {
+    sun.style.display = enabled ? "block" : "none";
+    moon.style.display = enabled ? "none" : "block";
+  }
+}
+
+async function toggleDarkMode() {
+  const next = !darkModeEnabled;
+  applyDarkMode(next);
+  await browser.storage.local.set({ darkMode: next });
+}
+
 // ── Debounce Helper ───────────────────────────────────────────
 function debounce(fn, ms) {
   let timer;
@@ -1544,6 +1568,8 @@ async function init() {
   const validModes = ["auto", "on", "off"];
   pageContextMode = validModes.includes(stored.pageContextMode) ? stored.pageContextMode : "auto";
   updatePageCtrlUI();
+  const dmResult = await browser.storage.local.get(["darkMode"]);
+  applyDarkMode(dmResult.darkMode === true);
   await migrateOldChatHistory();
 
   const storedId = await browser.storage.local.get(["active_conv_id"]);
@@ -1579,6 +1605,7 @@ async function init() {
     }
   });
   document.getElementById("settings-btn").addEventListener("click", openSettings);
+  document.getElementById("darkmode-btn").addEventListener("click", toggleDarkMode);
   document.getElementById("back-btn").addEventListener("click", closeSettings);
   document.getElementById("save-settings-btn").addEventListener("click", saveSettingsFromUI);
   document.getElementById("clear-history-btn").addEventListener("click", clearHistory);
