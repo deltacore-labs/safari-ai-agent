@@ -1161,7 +1161,7 @@ async function* parseSSE(response) {
 }
 
 // ── OpenAI / Local / Hyperspace Streaming ────────────────────
-async function* streamOpenAI(messages, signal) {
+async function* streamOpenAI(messages, signal, imageData = null) {
   const providerId = settings.provider;
   const provider = PROVIDERS[providerId];
   const url = (providerId === "local" || providerId === "hyperspace")
@@ -1179,7 +1179,7 @@ async function* streamOpenAI(messages, signal) {
   const response = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({ model, messages: buildOpenAIMessagesWithImage(messages, pendingImageData), stream: true, max_tokens: 2048 }),
+    body: JSON.stringify({ model, messages: buildOpenAIMessagesWithImage(messages, imageData), stream: true, max_tokens: 2048 }),
     signal
   });
 
@@ -1260,9 +1260,9 @@ function buildOpenAIMessagesWithImage(messages, imageData) {
   return copy;
 }
 
-async function* streamAnthropic(messages, includeCtx = false, webContext = null, signal) {
+async function* streamAnthropic(messages, includeCtx = false, webContext = null, signal, imageData = null) {
   const systemPrompt = buildSystemPrompt(includeCtx, webContext);
-  const userMessages = buildAnthropicMessagesWithImage(messages, pendingImageData);
+  const userMessages = buildAnthropicMessagesWithImage(messages, imageData);
 
   const response = await fetch(settings.baseUrl || PROVIDERS.anthropic.baseUrl, {
     method: "POST",
@@ -1503,6 +1503,7 @@ async function sendMessage() {
   enterStopMode();
   input.value = "";
   input.style.height = "auto";
+  const imageDataSnapshot = pendingImageData;
   clearPendingImage();
 
   // Show model tag if model changed since last message
@@ -1571,8 +1572,7 @@ async function sendMessage() {
     }
 
     if (providerId === "gemini") {
-      if (pendingImageData) {
-        clearPendingImage();
+      if (imageDataSnapshot) {
         typingEl.classList.add("hidden");
         typingEl.setAttribute("aria-hidden", "true");
         fullResponse = "Bildübertragung wird von Gemini in diesem Modus noch nicht unterstützt.";
@@ -1598,8 +1598,8 @@ async function sendMessage() {
       }
     } else {
       const generator = providerId === "anthropic"
-        ? streamAnthropic(messages, includeCtx, null, abortController.signal)
-        : streamOpenAI(messages, abortController.signal);
+        ? streamAnthropic(messages, includeCtx, null, abortController.signal, imageDataSnapshot)
+        : streamOpenAI(messages, abortController.signal, imageDataSnapshot);
 
       let firstToken = true;
       flusher = makeStreamFlusher(() => aiBubble, () => fullResponse);
