@@ -1026,6 +1026,7 @@ async function sendMessage() {
     }
   }
   typingEl.classList.remove("hidden");
+  typingEl.removeAttribute("aria-hidden");
   scrollToBottom();
 
   const providerId = settings.provider;
@@ -1084,6 +1085,7 @@ async function sendMessage() {
     if (supportsWebSearch && fullResponse && await uncertaintyCheck(fullResponse)) {
       renderContextModeNotice("Websuche wird durchgeführt…");
       typingEl.classList.remove("hidden");
+      typingEl.removeAttribute("aria-hidden");
       scrollToBottom();
 
       const webContext = await fetchWebContext(text);
