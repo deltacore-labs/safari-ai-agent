@@ -438,6 +438,40 @@ async function toggleDarkMode() {
   await browser.storage.local.set({ darkMode: next });
 }
 
+function handleGlobalKeydown(e) {
+  const meta = e.metaKey || e.ctrlKey;
+  // Escape: close dropdown, then settings
+  if (e.key === "Escape") {
+    const dropdown = document.getElementById("history-dropdown");
+    if (!dropdown.classList.contains("hidden")) {
+      closeHistoryDropdown();
+      return;
+    }
+    const settingsPanel = document.getElementById("settings-panel");
+    if (settingsPanel.classList.contains("active")) {
+      closeSettings();
+      return;
+    }
+  }
+  // ⌘+K / Ctrl+K → new conversation
+  if (meta && e.key === "k") {
+    e.preventDefault();
+    startNewConversation();
+    return;
+  }
+  // ⌘+, / Ctrl+, → settings
+  if (meta && e.key === ",") {
+    e.preventDefault();
+    const settingsPanel = document.getElementById("settings-panel");
+    if (settingsPanel.classList.contains("active")) {
+      closeSettings();
+    } else {
+      openSettings();
+    }
+    return;
+  }
+}
+
 // ── Debounce Helper ───────────────────────────────────────────
 function debounce(fn, ms) {
   let timer;
@@ -1489,6 +1523,11 @@ function onInputKeydown(e) {
     e.preventDefault();
     sendMessage();
   }
+  // ⌘+Enter / Ctrl+Enter also sends (meta for Mac, ctrl for fallback)
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    sendMessage();
+  }
 }
 
 function autoResizeTextarea(e) {
@@ -1617,6 +1656,7 @@ async function init() {
   document.getElementById("user-input").addEventListener("input", autoResizeTextarea);
   document.getElementById("new-chat-btn").addEventListener("click", startNewConversation);
   document.getElementById("refresh-models-btn").addEventListener("click", refreshModels);
+  document.addEventListener("keydown", handleGlobalKeydown);
 
   document.getElementById("history-btn").addEventListener("click", (e) => {
     e.stopPropagation();
