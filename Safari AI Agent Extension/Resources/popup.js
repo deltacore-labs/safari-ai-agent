@@ -560,7 +560,7 @@ async function fetchPageContent() {
     });
 
     const data = results?.[0]?.result;
-    if (data && data.text) {
+    if (data) {
       currentPageContext = data;
     } else {
       currentPageContext = null;
