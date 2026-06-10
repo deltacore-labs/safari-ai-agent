@@ -1655,14 +1655,16 @@ async function init() {
   chatHistory = await loadConversation(activeConvId);
   applyTheme(settings.provider, settings.model);
   const dmResult = await browser.storage.local.get(["darkMode"]);
-  applyDarkMode(dmResult.darkMode === true);
+  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
+  applyDarkMode(dmResult.darkMode !== undefined ? dmResult.darkMode === true : prefersDark);
 
   if (chatHistory.length === 0) {
     renderEmptyState();
   } else {
-    chatHistory.forEach(m =>
-      renderMessage(m.role === "assistant" ? "ai" : "user", m.content)
-    );
+    chatHistory.forEach(m => {
+      const bubble = renderMessage(m.role === "assistant" ? "ai" : "user", m.content);
+      if (m.role === "assistant") requestAnimationFrame(() => highlightCode(bubble));
+    });
   }
 
   if (pageContextMode !== "off") fetchPageContent();

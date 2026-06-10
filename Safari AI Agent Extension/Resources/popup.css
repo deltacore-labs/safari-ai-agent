@@ -322,6 +322,7 @@ html, body {
 }
 .message-bubble pre:hover .code-copy-btn { opacity: 1; }
 .code-copy-btn:hover { color: var(--color-ink); }
+.code-copy-btn:focus-visible { opacity: 1; outline: 2px solid var(--color-accent); }
 .message-bubble.ai pre code {
   background: none;
   padding: 0;
