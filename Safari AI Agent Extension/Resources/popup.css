@@ -772,3 +772,91 @@ html, body {
   color: #d65d41;
   flex-shrink: 0;
 }
+
+/* ── History Dropdown ─────────────────────────────────────────── */
+.history-dropdown {
+  position: absolute;
+  top: 48px; /* height of header */
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--color-surface-1);
+  border-bottom: 1px solid var(--color-hairline);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-dropdown.hidden {
+  display: none;
+}
+
+.history-new-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-xs) var(--space-md);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-hairline-soft);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-accent);
+  cursor: pointer;
+  text-align: left;
+  flex-shrink: 0;
+}
+
+.history-new-btn:hover {
+  background: var(--color-surface-2);
+}
+
+.history-list {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-hairline-soft);
+  transition: background 0.1s;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item:hover {
+  background: var(--color-surface-2);
+}
+
+.history-item.active {
+  background: var(--color-surface-2);
+  border-left: 2px solid var(--color-accent);
+  padding-left: calc(var(--space-md) - 2px);
+}
+
+.history-item-title {
+  font-size: 13px;
+  color: var(--color-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-item-date {
+  font-size: 11px;
+  color: var(--color-ink-subtle);
+  margin-top: 2px;
+}
+
+/* Ensure chat-panel is positioned so dropdown can use absolute positioning */
+#chat-panel {
+  position: relative;
+}
