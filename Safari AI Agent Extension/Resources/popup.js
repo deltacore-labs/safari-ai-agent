@@ -1000,6 +1000,14 @@ async function sendMessage() {
     lastDisplayedModel = currentModel;
   }
 
+  // Guard: no API key (hyperspace and local don't need one)
+  if (!settings.apiKey && settings.provider !== "local" && settings.provider !== "hyperspace") {
+    isStreaming = false;
+    document.getElementById("send-btn").disabled = input.value.trim().length === 0;
+    renderMessage("ai", "Bitte zuerst einen API-Key in den Einstellungen hinterlegen.");
+    return;
+  }
+
   chatHistory.push({ role: "user", content: text });
   renderMessage("user", text);
 
@@ -1019,16 +1027,6 @@ async function sendMessage() {
   }
   typingEl.classList.remove("hidden");
   scrollToBottom();
-
-  // Guard: no API key
-  if (!settings.apiKey && settings.provider !== "local") {
-    typingEl.classList.add("hidden");
-    typingEl.setAttribute("aria-hidden", "true");
-    renderMessage("ai", "Bitte zuerst einen API-Key in den Einstellungen hinterlegen.");
-    isStreaming = false;
-    document.getElementById("send-btn").disabled = input.value.trim().length === 0;
-    return;
-  }
 
   const providerId = settings.provider;
 
