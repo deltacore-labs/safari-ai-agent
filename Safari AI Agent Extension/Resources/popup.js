@@ -383,7 +383,7 @@ function markdownToHtml(text) {
     .map(chunk => {
       const trimmed = chunk.trim();
       if (!trimmed) return "";
-      if (trimmed.startsWith("<pre") || trimmed.startsWith("<ul") || trimmed.startsWith("<table") || trimmed.startsWith("<hr")) return trimmed;
+      if (trimmed.startsWith("<pre") || trimmed.startsWith("<ul") || trimmed.startsWith("<table") || trimmed.startsWith("<hr") || /^<h[1-6][\s>]/.test(trimmed)) return trimmed;
       return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
     })
     .join("");
