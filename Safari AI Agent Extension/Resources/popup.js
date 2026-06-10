@@ -166,6 +166,25 @@ async function setActiveConvId(id) {
   await browser.storage.local.set({ active_conv_id: id });
 }
 
+async function migrateOldChatHistory() {
+  const result = await browser.storage.local.get(["chatHistory", "conversations_index"]);
+  // Only migrate if old key exists and no new index yet
+  if (!result.chatHistory || result.conversations_index) return;
+
+  const messages = Array.isArray(result.chatHistory) ? result.chatHistory : [];
+  if (messages.length === 0) {
+    await browser.storage.local.remove("chatHistory");
+    return;
+  }
+
+  const id = generateConvId();
+  await saveConversation(id, messages);
+  const firstUser = messages.find(m => m.role === "user");
+  await updateConversationIndex(id, firstUser?.content ?? "");
+  await setActiveConvId(id);
+  await browser.storage.local.remove("chatHistory");
+}
+
 // ── Settings UI ───────────────────────────────────────────────
 async function populateModelDropdown(providerId) {
   const modelSelect = document.getElementById("model-select");
@@ -1167,7 +1186,9 @@ async function runWebSearchFallback({ providerId, history, text, includeCtx, ful
 
   if (webResponse) {
     chatHistory.push({ role: "assistant", content: webResponse });
-    await saveHistory(chatHistory);
+    await saveConversation(activeConvId, chatHistory);
+    const firstUser = chatHistory.find(m => m.role === "user");
+    await updateConversationIndex(activeConvId, firstUser?.content ?? "");
   }
 }
 
@@ -1317,7 +1338,9 @@ async function sendMessage() {
 
     const historyBeforeFirstReply = [...chatHistory]; // snapshot before first reply
     chatHistory.push({ role: "assistant", content: fullResponse });
-    await saveHistory(chatHistory);
+    await saveConversation(activeConvId, chatHistory);
+    const firstUser = chatHistory.find(m => m.role === "user");
+    await updateConversationIndex(activeConvId, firstUser?.content ?? "");
 
     // Snapshot for web-search fallback — runs after finally (outside try block)
     snapshotForWebSearch = {
@@ -1338,7 +1361,9 @@ async function sendMessage() {
     if (err.name === "AbortError" && aiBubble && fullResponse) {
       flusher?.finalize();
       chatHistory.push({ role: "assistant", content: fullResponse });
-      await saveHistory(chatHistory);
+      await saveConversation(activeConvId, chatHistory);
+      const firstUser = chatHistory.find(m => m.role === "user");
+      await updateConversationIndex(activeConvId, firstUser?.content ?? "");
     }
   } finally {
     isStreaming = false;
@@ -1407,19 +1432,26 @@ async function clearHistory() {
   lastDisplayedModel = null;
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
-  try { await browser.storage.local.remove("chatHistory"); } catch { /* ignore */ }
+  try {
+    await saveConversation(activeConvId, []);
+    // Remove from index since it's now empty
+    let index = await loadConversationsIndex();
+    index = index.filter(c => c.id !== activeConvId);
+    await saveConversationsIndex(index);
+  } catch { /* ignore */ }
 }
 
 async function startNewConversation() {
-  // Reset UI first — don't wait for storage
+  if (chatHistory.length === 0) return; // guard: don't create empty conv
+
+  const newId = generateConvId();
+  await setActiveConvId(newId);
   chatHistory = [];
   lastDisplayedModel = null;
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
   currentPageContext = null;
   if (pageContextMode !== "off") fetchPageContent();
-  // Clear storage — best effort
-  try { await browser.storage.local.remove("chatHistory"); } catch { /* ignore */ }
 }
 
 function refreshModels() {
@@ -1447,7 +1479,21 @@ async function init() {
   const validModes = ["auto", "on", "off"];
   pageContextMode = validModes.includes(stored.pageContextMode) ? stored.pageContextMode : "auto";
   updatePageCtrlUI();
-  chatHistory = await loadHistory();
+  await migrateOldChatHistory();
+
+  const storedId = await browser.storage.local.get(["active_conv_id"]);
+  const index = await loadConversationsIndex();
+
+  let convId = storedId.active_conv_id;
+  // Validate that active ID still exists in index
+  if (!convId || !index.find(c => c.id === convId)) {
+    convId = generateConvId();
+    await setActiveConvId(convId);
+  } else {
+    activeConvId = convId;
+  }
+
+  chatHistory = await loadConversation(activeConvId);
   applyTheme(settings.provider, settings.model);
 
   if (chatHistory.length === 0) {
