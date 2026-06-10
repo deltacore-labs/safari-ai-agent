@@ -1054,6 +1054,7 @@ async function sendMessage() {
     if (providerId === "gemini") {
       fullResponse = await callGemini(messages, includeCtx);
       typingEl.classList.add("hidden");
+      typingEl.setAttribute("aria-hidden", "true");
       aiBubble = renderMessage("ai", fullResponse);
       renderKatex(aiBubble);
     } else {
@@ -1066,6 +1067,7 @@ async function sendMessage() {
       for await (const token of generator) {
         if (firstToken) {
           typingEl.classList.add("hidden");
+          typingEl.setAttribute("aria-hidden", "true");
           aiBubble = renderMessage("ai", "");
           firstToken = false;
         }
@@ -1091,6 +1093,7 @@ async function sendMessage() {
       const webContext = await fetchWebContext(text);
 
       typingEl.classList.add("hidden");
+      typingEl.setAttribute("aria-hidden", "true");
 
       if (webContext) {
         let webMessages;
@@ -1139,6 +1142,7 @@ async function sendMessage() {
 
   } catch (err) {
     typingEl.classList.add("hidden");
+    typingEl.setAttribute("aria-hidden", "true");
     renderMessage("ai", `Fehler: ${err.message}`);
   } finally {
     isStreaming = false;
