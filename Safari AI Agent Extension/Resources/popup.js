@@ -938,6 +938,31 @@ async function callGemini(messages, includeCtx = false, webContext = null) {
   return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "(Keine Antwort)";
 }
 
+// ── Streaming Flush Helper ────────────────────────────────────
+function makeStreamFlusher(getBubble, getResponse) {
+  let timer = null;
+  function flush() {
+    timer = null;
+    const bubble = getBubble();
+    if (!bubble) return;
+    requestAnimationFrame(() => {
+      bubble.innerHTML = markdownToHtml(getResponse());
+      bubble._rawText = getResponse();
+      const list = document.getElementById("messages");
+      const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
+      if (nearBottom) list.scrollTop = list.scrollHeight;
+    });
+  }
+  function schedule() {
+    if (!timer) timer = setTimeout(flush, 50);
+  }
+  function finalize() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    flush();
+  }
+  return { schedule, finalize };
+}
+
 // ── Send Message ──────────────────────────────────────────────
 async function sendMessage() {
   if (isStreaming) return;
@@ -1023,6 +1048,7 @@ async function sendMessage() {
         : streamOpenAI(messages);
 
       let firstToken = true;
+      const flusher = makeStreamFlusher(() => aiBubble, () => fullResponse);
       for await (const token of generator) {
         if (firstToken) {
           typingEl.classList.add("hidden");
@@ -1030,10 +1056,9 @@ async function sendMessage() {
           firstToken = false;
         }
         fullResponse += token;
-        aiBubble.innerHTML = markdownToHtml(fullResponse);
-        aiBubble._rawText = fullResponse;
-        scrollToBottomIfNear();
+        flusher.schedule();
       }
+      flusher.finalize();
     }
 
     const historyBeforeFirstReply = [...chatHistory]; // snapshot before first reply
@@ -1074,16 +1099,16 @@ async function sendMessage() {
             : streamOpenAI(webMessages);
 
           let firstWebToken = true;
+          const webFlusher = makeStreamFlusher(() => webBubble, () => webResponse);
           for await (const token of webGenerator) {
             if (firstWebToken) {
               webBubble = renderMessage("ai", "");
               firstWebToken = false;
             }
             webResponse += token;
-            webBubble.innerHTML = markdownToHtml(webResponse);
-            webBubble._rawText = webResponse;
-            scrollToBottomIfNear();
+            webFlusher.schedule();
           }
+          webFlusher.finalize();
         }
 
         if (webResponse) {
