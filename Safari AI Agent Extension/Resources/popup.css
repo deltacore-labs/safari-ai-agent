@@ -810,6 +810,37 @@ html, body {
   filter: brightness(1.1);
 }
 
+/* ── Attach Button & Image Preview ──────────────────────────── */
+.attach-btn { color: var(--color-ink-muted); }
+.attach-btn:hover { color: var(--color-ink); }
+
+.image-preview-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px var(--space-md) 0;
+  background: var(--color-surface-1);
+}
+.image-preview-wrap.hidden { display: none; }
+.image-preview-thumb {
+  height: 48px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-hairline);
+  object-fit: contain;
+}
+.image-remove-btn {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  width: 20px; height: 20px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--color-ink-muted);
+  display: flex; align-items: center; justify-content: center;
+}
+.image-remove-btn:hover { color: var(--color-error); }
+
 /* ── Quick Replies ───────────────────────────────────────────── */
 .quick-replies {
   display: flex;

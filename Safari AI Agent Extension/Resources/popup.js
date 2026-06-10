@@ -55,6 +55,7 @@ let abortController = null;
 let currentPageContext = null;
 let pageContextMode = "auto"; // "auto" | "on" | "off"
 let lastDisplayedModel = null;
+let pendingImageData = null; // { base64: string, mimeType: string } | null
 
 // ── Storage Helpers ───────────────────────────────────────────
 async function loadSettings() {
@@ -493,6 +494,38 @@ async function toggleDarkMode() {
   const next = !darkModeEnabled;
   applyDarkMode(next);
   await browser.storage.local.set({ darkMode: next });
+}
+
+function clearPendingImage() {
+  pendingImageData = null;
+  const wrap = document.getElementById("image-preview-wrap");
+  const img  = document.getElementById("image-preview");
+  if (wrap) wrap.classList.add("hidden");
+  if (img)  img.src = "";
+}
+
+function loadImageFile(file) {
+  if (!file) return;
+  const ALLOWED = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+  if (!ALLOWED.includes(file.type)) {
+    alert("Nur PNG, JPEG, GIF und WebP werden unterstützt.");
+    return;
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    alert("Bild zu groß (max. 5 MB).");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const dataUrl = e.target.result;
+    const base64 = dataUrl.split(",")[1];
+    pendingImageData = { base64, mimeType: file.type };
+    const wrap = document.getElementById("image-preview-wrap");
+    const img  = document.getElementById("image-preview");
+    img.src = dataUrl;
+    wrap.classList.remove("hidden");
+  };
+  reader.readAsDataURL(file);
 }
 
 function handleGlobalKeydown(e) {
@@ -1146,7 +1179,7 @@ async function* streamOpenAI(messages, signal) {
   const response = await fetch(url, {
     method: "POST",
     headers,
-    body: JSON.stringify({ model, messages, stream: true, max_tokens: 2048 }),
+    body: JSON.stringify({ model, messages: buildOpenAIMessagesWithImage(messages, pendingImageData), stream: true, max_tokens: 2048 }),
     signal
   });
 
@@ -1185,9 +1218,51 @@ function normalizeAnthropicMessages(messages) {
   return merged;
 }
 
+function buildAnthropicMessagesWithImage(messages, imageData) {
+  const normalized = normalizeAnthropicMessages(messages);
+  if (!imageData) return normalized;
+  const last = normalized[normalized.length - 1];
+  if (!last || last.role !== "user") return normalized;
+  return [...normalized.slice(0, -1), {
+    role: "user",
+    content: [
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: imageData.mimeType,
+          data: imageData.base64
+        }
+      },
+      { type: "text", text: last.content }
+    ]
+  }];
+}
+
+function buildOpenAIMessagesWithImage(messages, imageData) {
+  if (!imageData) return messages;
+  const copy = messages.map(m => ({ ...m }));
+  for (let i = copy.length - 1; i >= 0; i--) {
+    if (copy[i].role === "user") {
+      copy[i] = {
+        role: "user",
+        content: [
+          { type: "text", text: copy[i].content },
+          {
+            type: "image_url",
+            image_url: { url: `data:${imageData.mimeType};base64,${imageData.base64}` }
+          }
+        ]
+      };
+      break;
+    }
+  }
+  return copy;
+}
+
 async function* streamAnthropic(messages, includeCtx = false, webContext = null, signal) {
   const systemPrompt = buildSystemPrompt(includeCtx, webContext);
-  const userMessages = normalizeAnthropicMessages(messages);
+  const userMessages = buildAnthropicMessagesWithImage(messages, pendingImageData);
 
   const response = await fetch(settings.baseUrl || PROVIDERS.anthropic.baseUrl, {
     method: "POST",
@@ -1428,6 +1503,7 @@ async function sendMessage() {
   enterStopMode();
   input.value = "";
   input.style.height = "auto";
+  clearPendingImage();
 
   // Show model tag if model changed since last message
   const currentModel = settings.model || settings.customModel || "?";
@@ -1495,23 +1571,31 @@ async function sendMessage() {
     }
 
     if (providerId === "gemini") {
-      fullResponse = await callGemini(messages, includeCtx, null, abortController.signal);
-      typingEl.classList.add("hidden");
-      typingEl.setAttribute("aria-hidden", "true");
-      aiBubble = renderMessage("ai", fullResponse);
+      if (pendingImageData) {
+        clearPendingImage();
+        typingEl.classList.add("hidden");
+        typingEl.setAttribute("aria-hidden", "true");
+        fullResponse = "Bildübertragung wird von Gemini in diesem Modus noch nicht unterstützt.";
+        aiBubble = renderMessage("ai", fullResponse);
+      } else {
+        fullResponse = await callGemini(messages, includeCtx, null, abortController.signal);
+        typingEl.classList.add("hidden");
+        typingEl.setAttribute("aria-hidden", "true");
+        aiBubble = renderMessage("ai", fullResponse);
 
-      // Quick Replies — parse BEFORE KaTeX so re-setting innerHTML doesn't undo KaTeX
-      if (aiBubble && fullResponse) {
-        const { text: cleanGeminiText, replies: geminiReplies } = parseQuickReplies(fullResponse);
-        if (geminiReplies.length > 0) {
-          fullResponse = cleanGeminiText;
-          aiBubble.innerHTML = markdownToHtml(cleanGeminiText);
-          aiBubble._rawText = cleanGeminiText;
-          renderQuickReplies(geminiReplies, aiBubble.closest(".message-row"));
+        // Quick Replies — parse BEFORE KaTeX so re-setting innerHTML doesn't undo KaTeX
+        if (aiBubble && fullResponse) {
+          const { text: cleanGeminiText, replies: geminiReplies } = parseQuickReplies(fullResponse);
+          if (geminiReplies.length > 0) {
+            fullResponse = cleanGeminiText;
+            aiBubble.innerHTML = markdownToHtml(cleanGeminiText);
+            aiBubble._rawText = cleanGeminiText;
+            renderQuickReplies(geminiReplies, aiBubble.closest(".message-row"));
+          }
         }
+        renderKatex(aiBubble);
+        highlightCode(aiBubble);
       }
-      renderKatex(aiBubble);
-      highlightCode(aiBubble);
     } else {
       const generator = providerId === "anthropic"
         ? streamAnthropic(messages, includeCtx, null, abortController.signal)
@@ -1723,6 +1807,7 @@ async function importConversations(file) {
 
 async function startNewConversation() {
   if (chatHistory.length === 0) return; // guard: don't create empty conv
+  clearPendingImage();
 
   const newId = generateConvId();
   await setActiveConvId(newId);
@@ -1815,6 +1900,24 @@ async function init() {
   document.getElementById("provider-select").addEventListener("change", onProviderChange);
   document.getElementById("user-input").addEventListener("keydown", onInputKeydown);
   document.getElementById("user-input").addEventListener("input", autoResizeTextarea);
+
+  document.getElementById("attach-btn").addEventListener("click", () => {
+    document.getElementById("image-file-input").click();
+  });
+  document.getElementById("image-file-input").addEventListener("change", (e) => {
+    loadImageFile(e.target.files?.[0]);
+    e.target.value = "";
+  });
+  document.getElementById("image-remove-btn").addEventListener("click", clearPendingImage);
+
+  document.getElementById("user-input").addEventListener("dragover", (e) => {
+    e.preventDefault();
+  });
+  document.getElementById("user-input").addEventListener("drop", (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files?.[0];
+    if (file && file.type.startsWith("image/")) loadImageFile(file);
+  });
   document.getElementById("new-chat-btn").addEventListener("click", startNewConversation);
   document.getElementById("refresh-models-btn").addEventListener("click", refreshModels);
   document.addEventListener("keydown", handleGlobalKeydown);

@@ -90,7 +90,20 @@
         </div>
       </div>
 
+      <div id="image-preview-wrap" class="image-preview-wrap hidden">
+        <img id="image-preview" class="image-preview-thumb" src="" alt="Anhang Vorschau">
+        <button id="image-remove-btn" class="image-remove-btn" aria-label="Bild entfernen">×</button>
+      </div>
+
       <div class="input-area">
+        <button id="attach-btn" class="icon-btn attach-btn" aria-label="Bild anhängen" title="Bild anhängen">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="3" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="5.5" cy="7" r="1.5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M1 11l4-4 3 3 2-2 5 4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/gif,image/webp" style="display:none">
         <textarea
           id="user-input"
           placeholder="Frage stellen…"
