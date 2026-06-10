@@ -149,9 +149,17 @@ async function updateConversationIndex(id, firstUserMessage) {
     index.unshift(entry);
   }
 
-  // Sort newest first and enforce max limit
-  index.sort((a, b) => b.updatedAt - a.updatedAt);
-  const removed = index.splice(MAX_CONVERSATIONS);
+  // Sort: pinned first (stable), then by updatedAt DESC
+  index.sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return b.updatedAt - a.updatedAt;
+  });
+  // Only unpinned conversations count toward the limit
+  const unpinned = index.filter(c => !c.pinned);
+  const pinned   = index.filter(c =>  c.pinned);
+  const removed  = unpinned.splice(MAX_CONVERSATIONS);
+  index = [...pinned, ...unpinned];
 
   // Delete storage for removed conversations
   for (const conv of removed) {
@@ -206,6 +214,10 @@ async function renderHistoryDropdown() {
     item.className = "history-item" + (conv.id === activeConvId ? " active" : "");
     item.setAttribute("role", "option");
     item.dataset.convId = conv.id;
+    item.style.cssText = "flex-direction:row;align-items:center;gap:8px";
+
+    const textCol = document.createElement("div");
+    textCol.style.cssText = "flex:1;min-width:0;display:flex;flex-direction:column";
 
     const titleEl = document.createElement("div");
     titleEl.className = "history-item-title";
@@ -215,10 +227,33 @@ async function renderHistoryDropdown() {
     dateEl.className = "history-item-date";
     dateEl.textContent = formatRelativeDate(conv.updatedAt);
 
-    item.appendChild(titleEl);
-    item.appendChild(dateEl);
+    textCol.appendChild(titleEl);
+    textCol.appendChild(dateEl);
+
+    const pinBtn = document.createElement("button");
+    pinBtn.className = "history-pin-btn" + (conv.pinned ? " pinned" : "");
+    pinBtn.title = conv.pinned ? "Lösen" : "Anpinnen";
+    pinBtn.innerHTML = conv.pinned
+      ? `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 1L15 6.5l-3.5 1-3 3v3l-2-2-3 3-1-1 3-3-2-2h3l1-3.5z"/></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 1L15 6.5l-3.5 1-3 3v3l-2-2-3 3-1-1 3-3-2-2h3l1-3.5z"/></svg>`;
+    pinBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      togglePin(conv.id);
+    });
+
+    item.appendChild(textCol);
+    item.appendChild(pinBtn);
     list.appendChild(item);
   }
+}
+
+async function togglePin(id) {
+  let index = await loadConversationsIndex();
+  const entry = index.find(c => c.id === id);
+  if (!entry) return;
+  entry.pinned = !entry.pinned;
+  await saveConversationsIndex(index);
+  await renderHistoryDropdown();
 }
 
 function filterHistoryItems(query) {

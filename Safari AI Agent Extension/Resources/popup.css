@@ -960,6 +960,23 @@ html, body {
   margin-top: 2px;
 }
 
+.history-pin-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-ink-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-xs);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.history-pin-btn:hover,
+.history-pin-btn.pinned {
+  color: var(--color-accent);
+}
+
 /* Ensure chat-panel is positioned so dropdown can use absolute positioning */
 #chat-panel {
   position: relative;
