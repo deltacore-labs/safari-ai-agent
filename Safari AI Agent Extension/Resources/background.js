@@ -11,19 +11,23 @@ const PROMPTS = {
 };
 
 browser.runtime.onInstalled.addListener(() => {
-  for (const item of MENU_ITEMS) {
-    browser.contextMenus.create({
-      id: item.id,
-      title: item.title,
-      contexts: ["selection"]
-    });
-  }
+  browser.contextMenus.removeAll().then(() => {
+    for (const item of MENU_ITEMS) {
+      browser.contextMenus.create({
+        id: item.id,
+        title: item.title,
+        contexts: ["selection"]
+      });
+    }
+  });
 });
 
 browser.contextMenus.onClicked.addListener(async (info) => {
   const buildPrompt = PROMPTS[info.menuItemId];
   if (!buildPrompt || !info.selectionText) return;
-  const prompt = buildPrompt(info.selectionText.trim());
+  const MAX_SELECTION = 8000;
+  const text = info.selectionText.trim().slice(0, MAX_SELECTION);
+  const prompt = buildPrompt(text);
   await browser.storage.local.set({ contextMenuPrompt: prompt });
   try {
     await browser.runtime.sendMessage({ type: "CONTEXT_MENU_TEXT", prompt });
