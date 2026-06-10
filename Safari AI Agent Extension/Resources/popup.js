@@ -261,10 +261,11 @@ async function saveSettingsFromUI() {
     model: isCustom ? "" : document.getElementById("model-select").value,
     customModel: isCustom ? document.getElementById("model-custom-input").value.trim() : "",
     systemPrompt: document.getElementById("system-prompt-input").value
+    // _autoDetected wird bewusst nicht gespeichert
   };
 
-  settings = newSettings;
-  await saveSettings(settings);
+  settings = { ...newSettings, _autoDetected: false };
+  await saveSettings(newSettings); // nur newSettings ohne _autoDetected
   lastDisplayedModel = null;
   applyTheme(settings.provider, settings.model);
 
