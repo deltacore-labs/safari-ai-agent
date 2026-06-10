@@ -1523,11 +1523,6 @@ function onInputKeydown(e) {
     e.preventDefault();
     sendMessage();
   }
-  // ⌘+Enter / Ctrl+Enter also sends (meta for Mac, ctrl for fallback)
-  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-    e.preventDefault();
-    sendMessage();
-  }
 }
 
 function autoResizeTextarea(e) {
