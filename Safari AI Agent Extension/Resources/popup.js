@@ -221,9 +221,23 @@ async function renderHistoryDropdown() {
   }
 }
 
+function filterHistoryItems(query) {
+  const q = query.trim().toLowerCase();
+  document.querySelectorAll("#history-list .history-item").forEach(item => {
+    const title = item.querySelector(".history-item-title")?.textContent.toLowerCase() ?? "";
+    item.style.display = (!q || title.includes(q)) ? "" : "none";
+  });
+}
+
 async function openHistoryDropdown() {
   await renderHistoryDropdown();
   document.getElementById("history-dropdown").classList.remove("hidden");
+  const searchInput = document.getElementById("history-search");
+  if (searchInput) {
+    searchInput.value = "";
+    filterHistoryItems("");
+    searchInput.focus();
+  }
 }
 
 function closeHistoryDropdown() {
@@ -1741,6 +1755,17 @@ async function init() {
 
   document.getElementById("base-url-input").addEventListener("input", debouncedRefetchModels);
   document.getElementById("api-key-input").addEventListener("input", debouncedRefetchModels);
+
+  document.getElementById("history-search").addEventListener("input", (e) => {
+    filterHistoryItems(e.target.value);
+  });
+  document.getElementById("history-search").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      const dropdown = document.getElementById("history-dropdown");
+      if (!dropdown.classList.contains("hidden")) closeHistoryDropdown();
+    }
+  });
 }
 
 document.addEventListener("DOMContentLoaded", init);

@@ -876,6 +876,26 @@ html, body {
   display: none;
 }
 
+.history-search-wrap {
+  padding: 8px var(--space-md);
+  border-bottom: 1px solid var(--color-hairline-soft);
+  flex-shrink: 0;
+}
+.history-search-input {
+  width: 100%;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color 150ms;
+}
+.history-search-input:focus { border-color: var(--color-fin-orange); }
+.history-search-input::placeholder { color: var(--color-ink-tertiary); }
+
 .history-new-btn {
   display: flex;
   align-items: center;
