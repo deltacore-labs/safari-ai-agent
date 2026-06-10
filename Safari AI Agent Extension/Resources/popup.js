@@ -456,6 +456,8 @@ function handleGlobalKeydown(e) {
   // ⌘+K / Ctrl+K → new conversation
   if (meta && e.key === "k") {
     e.preventDefault();
+    if (isStreaming) return;
+    closeSettings();
     startNewConversation();
     return;
   }
