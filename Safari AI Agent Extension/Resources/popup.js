@@ -1082,7 +1082,8 @@ async function sendMessage() {
     await saveHistory(chatHistory);
 
     // Web search fallback — only runs once per user message
-    if (fullResponse && await uncertaintyCheck(fullResponse) && settings.baseUrl) {
+    const supportsWebSearch = settings.provider === "hyperspace" || settings.provider === "local";
+    if (supportsWebSearch && fullResponse && await uncertaintyCheck(fullResponse)) {
       renderContextModeNotice("Websuche wird durchgeführt…");
       typingEl.classList.remove("hidden");
       scrollToBottom();
