@@ -240,9 +240,10 @@ async function switchToConversation(id) {
   if (chatHistory.length === 0) {
     renderEmptyState();
   } else {
-    chatHistory.forEach(m =>
-      renderMessage(m.role === "assistant" ? "ai" : "user", m.content)
-    );
+    chatHistory.forEach(m => {
+      const bubble = renderMessage(m.role === "assistant" ? "ai" : "user", m.content);
+      if (m.role === "assistant") requestAnimationFrame(() => highlightCode(bubble));
+    });
   }
   currentPageContext = null;
   if (pageContextMode !== "off") fetchPageContent();
@@ -430,6 +431,10 @@ function applyDarkMode(enabled) {
   }
   const btn = document.getElementById("darkmode-btn");
   if (btn) btn.setAttribute("aria-pressed", String(enabled));
+  const lightTheme = document.getElementById("prism-theme-light");
+  const darkTheme = document.getElementById("prism-theme-dark");
+  if (lightTheme) lightTheme.disabled = enabled;
+  if (darkTheme) darkTheme.disabled = !enabled;
 }
 
 async function toggleDarkMode() {
@@ -1248,6 +1253,29 @@ function renderKatex(bubble) {
   } catch { /* ignore — fehlerhafte Formeln bleiben als Plain-Text */ }
 }
 
+function highlightCode(bubble) {
+  if (!bubble || typeof window.Prism === "undefined") return;
+  try {
+    window.Prism.highlightAllUnder(bubble);
+    bubble.querySelectorAll("pre:not([data-copy-wired])").forEach(pre => {
+      pre.setAttribute("data-copy-wired", "1");
+      const code = pre.querySelector("code");
+      if (!code) return;
+      const btn = document.createElement("button");
+      btn.className = "code-copy-btn";
+      btn.textContent = "Kopieren";
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(code.textContent).then(() => {
+          btn.textContent = "✓";
+          setTimeout(() => { btn.textContent = "Kopieren"; }, 1500);
+        });
+      });
+      pre.appendChild(btn);
+    });
+  } catch { /* ignore — highlight failure is cosmetic */ }
+}
+
 // ── Web-Search Fallback ───────────────────────────────────────
 // Runs after sendMessage()'s finally block so the send button is re-enabled
 // immediately after the main AI response. Fire-and-forget from sendMessage.
@@ -1290,6 +1318,7 @@ async function runWebSearchFallback({ providerId, history, text, includeCtx, ful
     webResponse = await callGemini(webMessages, includeCtx, webContext);
     webBubble = renderMessage("ai", webResponse);
     renderKatex(webBubble);
+    highlightCode(webBubble);
   } else {
     const webGenerator = providerId === "anthropic"
       ? streamAnthropic(webMessages, includeCtx, webContext)
@@ -1307,6 +1336,7 @@ async function runWebSearchFallback({ providerId, history, text, includeCtx, ful
     }
     webFlusher.finalize();
     requestAnimationFrame(() => renderKatex(webBubble));
+    requestAnimationFrame(() => highlightCode(webBubble));
   }
 
   if (webResponse) {
@@ -1429,6 +1459,7 @@ async function sendMessage() {
         }
       }
       renderKatex(aiBubble);
+      highlightCode(aiBubble);
     } else {
       const generator = providerId === "anthropic"
         ? streamAnthropic(messages, includeCtx, null, abortController.signal)
@@ -1448,6 +1479,7 @@ async function sendMessage() {
       }
       flusher.finalize();
       requestAnimationFrame(() => renderKatex(aiBubble));
+      requestAnimationFrame(() => highlightCode(aiBubble));
 
       // Quick Replies — parse from full response, strip marker from displayed bubble
       if (aiBubble && fullResponse) {
