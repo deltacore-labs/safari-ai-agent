@@ -54,6 +54,7 @@ let isStreaming = false;
 let abortController = null;
 let currentPageContext = null;
 let pageContextMode = "auto"; // "auto" | "on" | "off"
+let pageContextUsedInConversation = false;
 let lastDisplayedModel = null;
 let pendingImageData = null; // { base64: string, mimeType: string } | null
 
@@ -299,6 +300,7 @@ async function switchToConversation(id) {
     });
   }
   currentPageContext = null;
+  pageContextUsedInConversation = false;
   if (pageContextMode !== "off") fetchPageContent();
 }
 
@@ -919,8 +921,15 @@ async function fetchPageContent() {
   }
 }
 
+// ── URL Extraction ────────────────────────────────────────────
+function extractUrlFromText(text) {
+  const match = text.match(/https?:\/\/[^\s]+/);
+  if (!match) return null;
+  return match[0].replace(/[.,)\]]+$/, "");
+}
+
 // ── Page-Context Detection ────────────────────────────────────
-const PAGE_KEYWORDS_RE = /\b(diese[rn]?\s+(?:seite|artikel|text|inhalt)|was\s+steht\s+(?:hier|da|dort)|(?:hier|da|dort)\s+steht|auf\s+der\s+seite|den\s+text|dem\s+artikel|fasse\s+zusammen|übersetze\s+(?:das|den|die|mir)|erkläre\s+mir\s+das|this\s+page|the\s+article|what\s+does\s+it\s+say|summarize\s+this|translate\s+this)\b/i;
+const PAGE_KEYWORDS_RE = /\b(diese[rn]?\s+(?:seite|artikel|text|inhalt|webseite)|was\s+steht\s+(?:hier|da|dort)|(?:hier|da|dort)\s+steht|auf\s+der\s+(?:seite|webseite)|den\s+text|dem\s+artikel|fasse\s+zusammen|zusammenfassung|der\s+webseite|der\s+seite|übersetze\s+(?:das|den|die|mir)|erkläre\s+mir\s+das|this\s+page|the\s+article|what\s+does\s+it\s+say|summarize\s+this|translate\s+this)\b/i;
 
 function keywordCheck(text) {
   return PAGE_KEYWORDS_RE.test(text);
@@ -1007,8 +1016,11 @@ async function classifyWithAI(text) {
 
 async function shouldIncludePageContext(text) {
   if (!currentPageContext || currentPageContext._debugError) return false;
-  if (keywordCheck(text)) return true;
-  return await classifyWithAI(text);
+  if (pageContextUsedInConversation) return true;
+  if (keywordCheck(text)) { pageContextUsedInConversation = true; return true; }
+  const result = await classifyWithAI(text);
+  if (result) pageContextUsedInConversation = true;
+  return result;
 }
 
 // ── Uncertainty Detection ─────────────────────────────────────
@@ -1816,6 +1828,7 @@ async function startNewConversation() {
   document.getElementById("messages").innerHTML = "";
   renderEmptyState();
   currentPageContext = null;
+  pageContextUsedInConversation = false;
   if (pageContextMode !== "off") fetchPageContent();
 }
 
