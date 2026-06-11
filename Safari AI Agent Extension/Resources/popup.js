@@ -2199,7 +2199,12 @@ function agentLog(status, text) {
   const log = document.getElementById("agent-log");
   const entry = document.createElement("div");
   entry.className = `agent-log-entry status-${status}`;
-  entry.innerHTML = `<span class="agent-log-icon"></span><span>${text}</span>`;
+  const icon = document.createElement("span");
+  icon.className = "agent-log-icon";
+  const textSpan = document.createElement("span");
+  textSpan.textContent = text;
+  entry.appendChild(icon);
+  entry.appendChild(textSpan);
   log.appendChild(entry);
   log.scrollTop = log.scrollHeight;
 }
@@ -2219,33 +2224,43 @@ async function startAgentLoop() {
   document.getElementById("agent-log").innerHTML = "";
   setAgentRunning(true);
 
-  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-  const tabId = tabs?.[0]?.id;
-  if (!tabId) { agentLog("error", "Kein aktiver Tab gefunden."); setAgentRunning(false); return; }
+  try {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tabId = tabs?.[0]?.id;
+    if (tabId == null) { agentLog("error", "Kein aktiver Tab gefunden."); setAgentRunning(false); return; }
 
-  const response = await browser.runtime.sendMessage({
-    type: "AGENT_START",
-    task,
-    tabId,
-    providerId: settings.provider,
-    model: settings.model || settings.customModel,
-    apiKey: settings.apiKey,
-    baseUrl: settings.baseUrl
-  });
+    const response = await browser.runtime.sendMessage({
+      type: "AGENT_START",
+      task,
+      tabId,
+      providerId: settings.provider,
+      model: settings.model || settings.customModel,
+      apiKey: settings.apiKey,
+      baseUrl: settings.baseUrl
+    });
 
-  if (!response?.ok) {
-    agentLog("error", response?.error ?? "Konnte Agent nicht starten.");
+    if (!response?.ok) {
+      agentLog("error", response?.error ?? "Konnte Agent nicht starten.");
+      setAgentRunning(false);
+    }
+  } catch (e) {
+    agentLog("error", e.message);
     setAgentRunning(false);
   }
 }
 
 function stopAgentLoop() {
-  browser.runtime.sendMessage({ type: "AGENT_STOP" });
+  setAgentRunning(false);
+  document.getElementById("agent-confirm-bar").classList.add("hidden");
+  browser.runtime.sendMessage({ type: "AGENT_STOP" }).catch(() => {});
 }
 
 function initAgentTab() {
   document.getElementById("agent-btn").addEventListener("click", showAgentPanel);
-  document.getElementById("agent-back-btn").addEventListener("click", showChatPanel);
+  document.getElementById("agent-back-btn").addEventListener("click", () => {
+    if (agentRunning) return;
+    showChatPanel();
+  });
   document.getElementById("agent-start-btn").addEventListener("click", startAgentLoop);
   document.getElementById("agent-stop-btn").addEventListener("click", stopAgentLoop);
 
@@ -2263,7 +2278,7 @@ function initAgentTab() {
     if (msg.type === "AGENT_LOG") { agentLog(msg.status, msg.text); return; }
     if (msg.type === "AGENT_DONE") { setAgentRunning(false); return; }
     if (msg.type === "AGENT_CONFIRM_REQUEST") {
-      document.getElementById("agent-confirm-text").textContent = `Bestätigen: ${msg.actionText}`;
+      document.getElementById("agent-confirm-text").textContent = `Bestätigen: ${msg.actionText ?? ""}`;
       document.getElementById("agent-confirm-bar").classList.remove("hidden");
     }
   });
