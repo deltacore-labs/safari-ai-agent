@@ -82,7 +82,8 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     // 1. Screenshot
     let screenshotDataUrl = null;
     try {
-      screenshotDataUrl = await browser.tabs.captureVisibleTab(null, { format: "jpeg", quality: 70 });
+      const tabInfo = await browser.tabs.get(tabId);
+      screenshotDataUrl = await browser.tabs.captureVisibleTab(tabInfo.windowId, { format: "jpeg", quality: 70 });
     } catch (e) {
       notifyPopup({ type: "AGENT_LOG", status: "error", text: `Screenshot fehlgeschlagen: ${e.message}` });
     }
@@ -113,7 +114,7 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     const logText = buildLogText(aiResponse);
 
     // 4. Kritische Aktion? → Bestätigung anfordern
-    if (action === "submit" || (action === "click" && isSubmitElement(selector, domElements))) {
+    if (action === "click" && isSubmitElement(selector, domElements)) {
       const confirmed = await requestConfirmation(logText);
       if (agentAbort) {
         notifyPopup({ type: "AGENT_LOG", status: "info", text: "Abgebrochen." });
@@ -138,7 +139,7 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     }
 
     // 6. Aktion ausführen
-    const actionMsg = { action, selector, value, direction, amount, url, ms };
+    const actionMsg = { cmd: action, selector, value, direction, amount, url, ms };
     let actionTimeoutId;
     const actionResult = await Promise.race([
       browser.tabs.sendMessage(tabId, { action: "AGENT_ACTION", ...actionMsg })

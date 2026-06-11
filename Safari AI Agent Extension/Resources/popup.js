@@ -2217,11 +2217,13 @@ function setAgentRunning(running) {
 }
 
 async function startAgentLoop() {
+  if (agentRunning) return;
   const taskInput = document.getElementById("agent-task-input");
   const task = taskInput.value.trim();
   if (!task) return;
 
   document.getElementById("agent-log").innerHTML = "";
+  document.getElementById("agent-confirm-bar").classList.add("hidden");
   setAgentRunning(true);
 
   try {
@@ -2244,7 +2246,7 @@ async function startAgentLoop() {
       setAgentRunning(false);
     }
   } catch (e) {
-    agentLog("error", e.message);
+    agentLog("error", e?.message ?? String(e));
     setAgentRunning(false);
   }
 }

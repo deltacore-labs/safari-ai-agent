@@ -45,7 +45,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "AGENT_ACTION") {
-    const { action, selector, value, direction, amount, url, ms } = message;
+    const { cmd: action, selector, value, direction, amount, url, ms } = message;
     (async () => {
       try {
         if (action === "click") {
@@ -114,7 +114,11 @@ function buildSelector(el, depth = 0) {
   if (depth > 6 || !el || el === document.body) return el?.tagName?.toLowerCase() ?? "*";
   if (el.id) return `#${CSS.escape(el.id)}`;
   if (el.getAttribute("name")) {
-    const name = el.getAttribute("name").replace(/"/g, '\\"');
+    const name = el.getAttribute("name")
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\[/g, '\\[')
+      .replace(/\]/g, '\\]');
     return `${el.tagName.toLowerCase()}[name="${name}"]`;
   }
   const parent = el.parentElement;
