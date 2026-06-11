@@ -984,6 +984,88 @@ async function fetchUrlContent(url) {
   }
 }
 
+// ── Relevant Link Selection ───────────────────────────────────
+async function selectRelevantLinks(rootContent, links, question) {
+  if (!links || links.length === 0) return [];
+
+  const providerId = settings.provider;
+  const model = providerId === "local" ? settings.customModel : settings.model;
+  if (!model) return [];
+
+  const systemMsg = "Antworte ausschließlich mit einem JSON-Array von URLs, ohne Erklärung. Beispiel: [\"https://example.com/news\"]";
+  const linkList = links.slice(0, 50).join("\n");
+  const userMsg = `Seite: ${rootContent.title}\nURL: ${rootContent.url}\n\nSeiteninhalt (Auszug):\n${rootContent.text.slice(0, 3000)}\n\nVerfügbare Links auf der Seite:\n${linkList}\n\nNutzerfrage: ${question}\n\nWelche dieser Links (maximal 5) sind am relevantesten um die Frage zu beantworten?`;
+
+  const timeout = new Promise(resolve => setTimeout(() => resolve([]), 5000));
+
+  try {
+    let fetchPromise;
+
+    if (providerId === "anthropic") {
+      fetchPromise = fetch(PROVIDERS.anthropic.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-allow-browser": "true"
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 300,
+          system: systemMsg,
+          messages: [{ role: "user", content: userMsg }]
+        })
+      }).then(r => r.json()).then(json => {
+        const text = json.content?.[0]?.text ?? "[]";
+        const parsed = JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] ?? "[]");
+        return parsed.filter(u => links.includes(u)).slice(0, 5);
+      });
+    } else if (providerId === "gemini") {
+      const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
+      fetchPromise = fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userMsg }] }],
+          systemInstruction: { parts: [{ text: systemMsg }] },
+          generationConfig: { maxOutputTokens: 300 }
+        })
+      }).then(r => r.json()).then(json => {
+        const text = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
+        const parsed = JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] ?? "[]");
+        return parsed.filter(u => links.includes(u)).slice(0, 5);
+      });
+    } else {
+      const url = (providerId === "local" || providerId === "hyperspace")
+        ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
+        : PROVIDERS.openai.baseUrl;
+      const headers = { "Content-Type": "application/json" };
+      if (settings.apiKey) headers["Authorization"] = `Bearer ${settings.apiKey}`;
+      fetchPromise = fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          model,
+          max_tokens: 300,
+          messages: [
+            { role: "system", content: systemMsg },
+            { role: "user", content: userMsg }
+          ]
+        })
+      }).then(r => r.json()).then(json => {
+        const text = json.choices?.[0]?.message?.content ?? "[]";
+        const parsed = JSON.parse(text.match(/\[[\s\S]*\]/)?.[0] ?? "[]");
+        return parsed.filter(u => links.includes(u)).slice(0, 5);
+      });
+    }
+
+    return await Promise.race([fetchPromise, timeout]);
+  } catch {
+    return [];
+  }
+}
+
 // ── Page-Context Detection ────────────────────────────────────
 const PAGE_KEYWORDS_RE = /\b(diese[rn]?\s+(?:seite|artikel|text|inhalt|webseite)|was\s+steht\s+(?:hier|da|dort)|(?:hier|da|dort)\s+steht|auf\s+der\s+(?:seite|webseite)|den\s+text|dem\s+artikel|fasse\s+zusammen|zusammenfassung|der\s+webseite|der\s+seite|übersetze\s+(?:das|den|die|mir)|erkläre\s+mir\s+das|this\s+page|the\s+article|what\s+does\s+it\s+say|summarize\s+this|translate\s+this)\b/i;
 
