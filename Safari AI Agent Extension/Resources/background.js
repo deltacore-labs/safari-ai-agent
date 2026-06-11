@@ -115,6 +115,10 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     // 4. Kritische Aktion? → Bestätigung anfordern
     if (action === "submit" || (action === "click" && isSubmitElement(selector, domElements))) {
       const confirmed = await requestConfirmation(logText);
+      if (agentAbort) {
+        notifyPopup({ type: "AGENT_LOG", status: "info", text: "Abgebrochen." });
+        return;
+      }
       if (!confirmed) {
         notifyPopup({ type: "AGENT_LOG", status: "info", text: "Aktion abgebrochen (nicht bestätigt)." });
         continue;
@@ -135,9 +139,13 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
 
     // 6. Aktion ausführen
     const actionMsg = { action, selector, value, direction, amount, url, ms };
+    let actionTimeoutId;
     const actionResult = await Promise.race([
-      browser.tabs.sendMessage(tabId, { action: "AGENT_ACTION", ...actionMsg }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), AGENT_ACTION_TIMEOUT_MS))
+      browser.tabs.sendMessage(tabId, { action: "AGENT_ACTION", ...actionMsg })
+        .finally(() => clearTimeout(actionTimeoutId)),
+      new Promise((_, reject) => {
+        actionTimeoutId = setTimeout(() => reject(new Error("timeout")), AGENT_ACTION_TIMEOUT_MS);
+      })
     ]).catch(e => ({ ok: false, error: e.message }));
 
     if (!actionResult?.ok) {
@@ -148,7 +156,7 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     await new Promise(r => setTimeout(r, 600));
   }
 
-  notifyPopup({ type: "AGENT_LOG", status: "error", text: "Maximale Iterationen (30) erreicht." });
+  notifyPopup({ type: "AGENT_LOG", status: "error", text: `Maximale Iterationen (${AGENT_MAX_ITERATIONS}) erreicht.` });
 }
 
 function buildLogText(aiResponse) {
@@ -184,6 +192,17 @@ async function requestConfirmation(actionText) {
 }
 
 async function callAgentAI({ task, domElements, pageUrl, iteration, screenshotDataUrl, providerId, model, apiKey, baseUrl }) {
+  if (baseUrl) {
+    try {
+      const u = new URL(baseUrl);
+      if (!['https:', 'http:'].includes(u.protocol)) {
+        throw new Error("disallowed protocol in baseUrl");
+      }
+    } catch (e) {
+      throw new Error(`Invalid baseUrl: ${e.message}`);
+    }
+  }
+
   const domSummary = domElements.slice(0, 80).map(e =>
     `[${e.index}] ${e.tag}${e.type ? `[type=${e.type}]` : ""}${e.id ? `#${e.id}` : ""}${e.label ? ` "${e.label}"` : ""} → ${e.selector}`
   ).join("\n");
@@ -210,7 +229,7 @@ Verwende nur Selektoren aus der DOM-Liste. Wenn du unsicher bist, wähle "scroll
 
   userContent.push({
     type: "text",
-    text: `Aufgabe: ${task}\nIteration: ${iteration + 1}/30\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}`
+    text: `Aufgabe: ${task}\nIteration: ${iteration + 1}/${AGENT_MAX_ITERATIONS}\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}`
   });
 
   try {
@@ -224,14 +243,19 @@ Verwende nur Selektoren aus der DOM-Liste. Wenn du unsicher bist, wähle "scroll
         },
         body: JSON.stringify({
           model,
-          max_tokens: 256,
+          max_tokens: 1024,
           system: systemPrompt,
           messages: [{ role: "user", content: userContent }]
         })
       });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err?.error?.message ?? `HTTP ${resp.status}`);
+      }
       const data = await resp.json();
       const text = data?.content?.[0]?.text ?? "";
-      return JSON.parse(text);
+      const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      return JSON.parse(stripped);
     } else {
       // OpenAI-compatible (openai, hyperspace, local)
       const messages = [
@@ -240,8 +264,8 @@ Verwende nur Selektoren aus der DOM-Liste. Wenn du unsicher bist, wähle "scroll
           role: "user",
           content: screenshotDataUrl ? [
             { type: "image_url", image_url: { url: screenshotDataUrl } },
-            { type: "text", text: `Aufgabe: ${task}\nIteration: ${iteration + 1}/30\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}` }
-          ] : `Aufgabe: ${task}\nIteration: ${iteration + 1}/30\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}`
+            { type: "text", text: `Aufgabe: ${task}\nIteration: ${iteration + 1}/${AGENT_MAX_ITERATIONS}\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}` }
+          ] : `Aufgabe: ${task}\nIteration: ${iteration + 1}/${AGENT_MAX_ITERATIONS}\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}`
         }
       ];
       const endpoint = baseUrl
@@ -253,11 +277,16 @@ Verwende nur Selektoren aus der DOM-Liste. Wenn du unsicher bist, wähle "scroll
           "Authorization": `Bearer ${apiKey}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({ model, max_tokens: 256, messages })
+        body: JSON.stringify({ model, max_tokens: 1024, messages })
       });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err?.error?.message ?? `HTTP ${resp.status}`);
+      }
       const data = await resp.json();
       const text = data?.choices?.[0]?.message?.content ?? "";
-      return JSON.parse(text);
+      const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      return JSON.parse(stripped);
     }
   } catch (e) {
     return null;
