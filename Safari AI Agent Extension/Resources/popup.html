@@ -36,17 +36,10 @@
               <path d="M8 1v14M1 8h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </button>
-          <button id="agent-btn" class="icon-btn" aria-label="Seiten-Agent" title="Seiten-Agent">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M3 13c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M11 9l2 2M13 9l-2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </button>
           <button id="settings-btn" class="icon-btn" aria-label="Settings">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="8" cy="8" r="2.5" stroke="currentColor" stroke-width="1.5"/>
-              <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M2.93 2.93l1.06 1.06M12.01 12.01l1.06 1.06M2.93 13.07l1.06-1.06M12.01 3.99l1.06-1.06" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+              <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
+              <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.892 3.433-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.892-1.64-.901-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
             </svg>
           </button>
           <button id="darkmode-btn" class="icon-btn" aria-label="Dark Mode umschalten" aria-pressed="false" title="Dark Mode">
@@ -124,6 +117,38 @@
           </svg>
         </button>
       </div>
+
+    <!-- Agent Section (inline, collapsible) -->
+    <div id="agent-section" class="agent-section">
+      <button id="agent-toggle" class="agent-toggle" aria-expanded="false">
+        <span>Agent</span>
+        <svg class="agent-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2 4l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div id="agent-section-body" class="agent-section-body hidden">
+        <div id="agent-log" class="agent-log" role="log" aria-live="polite"></div>
+        <div id="agent-confirm-bar" class="agent-confirm-bar hidden">
+          <p id="agent-confirm-text" class="agent-confirm-text"></p>
+          <div class="agent-confirm-actions">
+            <button id="agent-confirm-yes" class="agent-confirm-btn agent-confirm-yes">Ausführen</button>
+            <button id="agent-confirm-no"  class="agent-confirm-btn agent-confirm-no">Abbrechen</button>
+          </div>
+        </div>
+        <div class="agent-input-row">
+          <textarea
+            id="agent-task-input"
+            class="agent-task-input"
+            placeholder="Aufgabe beschreiben, z.B. „Melde mich mit user@example.com an""
+            rows="2"
+          ></textarea>
+          <div class="agent-input-actions">
+            <button id="agent-start-btn" class="agent-start-btn">Starten</button>
+            <button id="agent-stop-btn"  class="agent-stop-btn hidden">Stop</button>
+          </div>
+        </div>
+      </div>
+    </div>
     </div>
 
     <!-- PANEL 2: Settings -->
@@ -228,40 +253,6 @@
       </div>
     </div>
 
-    <!-- PANEL 3: Agent -->
-    <div id="agent-panel" class="panel">
-      <header class="panel-header">
-        <span class="header-title">Seiten-Agent</span>
-        <button id="agent-back-btn" class="icon-btn" aria-label="Zurück zum Chat" title="Zurück zum Chat">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-      </header>
-
-      <div id="agent-log" class="agent-log" role="log" aria-live="polite"></div>
-
-      <div id="agent-confirm-bar" class="agent-confirm-bar hidden">
-        <p id="agent-confirm-text" class="agent-confirm-text"></p>
-        <div class="agent-confirm-actions">
-          <button id="agent-confirm-yes" class="agent-confirm-btn agent-confirm-yes">Ausführen</button>
-          <button id="agent-confirm-no"  class="agent-confirm-btn agent-confirm-no">Abbrechen</button>
-        </div>
-      </div>
-
-      <div class="agent-input-row">
-        <textarea
-          id="agent-task-input"
-          class="agent-task-input"
-          placeholder="Aufgabe beschreiben, z.B. „Melde mich mit user@example.com an""
-          rows="2"
-        ></textarea>
-        <div class="agent-input-actions">
-          <button id="agent-start-btn" class="agent-start-btn">Starten</button>
-          <button id="agent-stop-btn"  class="agent-stop-btn hidden">Stop</button>
-        </div>
-      </div>
-    </div>
 
   </div>
   <script src="katex/katex.min.js"></script>
