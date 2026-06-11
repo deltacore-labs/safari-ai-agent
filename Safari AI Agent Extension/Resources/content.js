@@ -58,9 +58,15 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const el = document.querySelector(selector);
           if (!el) { sendResponse({ ok: false, error: `selector not found: ${selector}` }); return; }
           el.focus();
-          el.value = "";
-          for (const char of String(value)) {
-            el.value += char;
+          const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+            || Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+          if (nativeSetter) {
+            nativeSetter.call(el, "");
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            nativeSetter.call(el, String(value));
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          } else {
+            el.value = String(value);
             el.dispatchEvent(new Event("input", { bubbles: true }));
           }
           el.dispatchEvent(new Event("change", { bubbles: true }));
@@ -76,8 +82,12 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
           el.dispatchEvent(new Event("change", { bubbles: true }));
           sendResponse({ ok: true });
         } else if (action === "navigate") {
-          const currentOrigin = window.location.origin;
           const targetUrl = new URL(url, window.location.href);
+          if (!['https:', 'http:'].includes(targetUrl.protocol)) {
+            sendResponse({ ok: false, error: "disallowed protocol" });
+            return;
+          }
+          const currentOrigin = window.location.origin;
           if (targetUrl.origin !== currentOrigin) {
             sendResponse({ ok: false, error: "cross-origin navigation blocked" });
             return;
@@ -100,18 +110,22 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return false;
 });
 
-function buildSelector(el) {
+function buildSelector(el, depth = 0) {
+  if (depth > 6 || !el || el === document.body) return el?.tagName?.toLowerCase() ?? "*";
   if (el.id) return `#${CSS.escape(el.id)}`;
-  if (el.getAttribute("name")) return `${el.tagName.toLowerCase()}[name="${el.getAttribute("name")}"]`;
+  if (el.getAttribute("name")) {
+    const name = el.getAttribute("name").replace(/"/g, '\\"');
+    return `${el.tagName.toLowerCase()}[name="${name}"]`;
+  }
   const parent = el.parentElement;
   if (parent) {
     const siblings = Array.from(parent.children).filter(c => c.tagName === el.tagName);
     if (siblings.length === 1) {
-      const parentSel = buildSelector(parent);
+      const parentSel = buildSelector(parent, depth + 1);
       return `${parentSel} > ${el.tagName.toLowerCase()}`;
     }
     const idx = siblings.indexOf(el);
-    const parentSel = buildSelector(parent);
+    const parentSel = buildSelector(parent, depth + 1);
     return `${parentSel} > ${el.tagName.toLowerCase()}:nth-of-type(${idx + 1})`;
   }
   return el.tagName.toLowerCase();
