@@ -931,6 +931,92 @@ async function fetchPageContent() {
   }
 }
 
+// ── Subpage Auto-Fetch ────────────────────────────────────────
+const SUBPAGE_KEYWORDS_RE = /\b(hole|hol\b|öffne|zeig|lies|lese|fetch|load|open|show|artikel|article|unterseite|subpage|inhalt|content|details|mehr\s+dazu|vollständig|complete|was\s+steht\s+(im|in\s+dem|dort|da))\b/i;
+
+async function classifySubpageNeed(text) {
+  const providerId = settings.provider;
+  const model = providerId === "local" ? settings.customModel : settings.model;
+  if (!model) return false;
+  if (!settings.apiKey && providerId !== "local") return false;
+  if ((providerId === "local" || providerId === "hyperspace") && !settings.baseUrl) return false;
+
+  const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
+  const userMsg = `Bezieht sich diese Frage auf den Detailinhalt eines verlinkten Artikels oder einer Unterseite? Frage: ${text}`;
+
+  const timeout = new Promise(resolve => setTimeout(() => resolve(false), 3000));
+
+  try {
+    let classifyPromise;
+
+    if (providerId === "anthropic") {
+      classifyPromise = fetch(PROVIDERS.anthropic.baseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": settings.apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-allow-browser": "true"
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 5,
+          system: systemMsg,
+          messages: [{ role: "user", content: userMsg }]
+        })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.content?.[0]?.text ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
+      });
+    } else if (providerId === "gemini") {
+      const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
+      classifyPromise = fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userMsg }] }],
+          systemInstruction: { parts: [{ text: systemMsg }] },
+          generationConfig: { maxOutputTokens: 5 }
+        })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
+      });
+    } else {
+      const url = (providerId === "local" || providerId === "hyperspace")
+        ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
+        : PROVIDERS.openai.baseUrl;
+      classifyPromise = fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${settings.apiKey}`
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 5,
+          messages: [
+            { role: "system", content: systemMsg },
+            { role: "user", content: userMsg }
+          ]
+        })
+      }).then(r => r.json()).then(json => {
+        const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
+        return answer.includes("ja") || answer.includes("yes");
+      });
+    }
+
+    return await Promise.race([classifyPromise, timeout]);
+  } catch {
+    return false;
+  }
+}
+
+async function shouldLoadSubpages(text) {
+  if (SUBPAGE_KEYWORDS_RE.test(text)) return true;
+  return await classifySubpageNeed(text);
+}
+
 // ── URL Extraction ────────────────────────────────────────────
 function extractUrlFromText(text) {
   const match = text.match(/https?:\/\/[^\s]+/);
