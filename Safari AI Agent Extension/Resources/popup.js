@@ -1705,6 +1705,32 @@ async function sendMessage() {
   let snapshotForWebSearch = null;
 
   try {
+    // ── URL Fetch Agent ───────────────────────────────────────
+    const detectedUrl = pageContextMode !== "off" ? extractUrlFromText(text) : null;
+    if (detectedUrl) {
+      renderContextModeNotice("🔗 Seite wird geladen…");
+      scrollToBottom();
+      const rootContent = await fetchUrlContent(detectedUrl);
+      if (rootContent) {
+        if (rootContent.links && rootContent.links.length > 0) {
+          renderContextModeNotice("🔍 Relevante Unterseiten werden geladen…");
+          scrollToBottom();
+          const selectedUrls = await selectRelevantLinks(rootContent, rootContent.links, text);
+          if (selectedUrls.length > 0) {
+            const subpages = (await Promise.all(selectedUrls.map(fetchUrlContent))).filter(Boolean);
+            if (subpages.length > 0) {
+              rootContent.text += "\n\n" + subpages
+                .map(p => `---\n${p.title}\n${p.url}\n${p.text}`)
+                .join("\n\n");
+            }
+          }
+        }
+        currentPageContext = { text: rootContent.text, title: rootContent.title, url: rootContent.url };
+        pageContextUsedInConversation = true;
+      }
+    }
+    // ─────────────────────────────────────────────────────────
+
     const includeCtx = pageContextMode === "on"
       ? true
       : pageContextMode === "off"
