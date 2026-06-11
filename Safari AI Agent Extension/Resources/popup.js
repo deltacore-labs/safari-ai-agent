@@ -2306,15 +2306,20 @@ async function init() {
   initAgentTab();
 }
 
-// ── Agent Tab ─────────────────────────────────────────────────
-function showAgentPanel() {
-  document.getElementById("chat-panel").classList.remove("active");
-  document.getElementById("agent-panel").classList.add("active");
+// ── Agent Section ─────────────────────────────────────────────
+function openAgentSection() {
+  const body = document.getElementById("agent-section-body");
+  const toggle = document.getElementById("agent-toggle");
+  body.classList.remove("hidden");
+  toggle.setAttribute("aria-expanded", "true");
 }
 
-function showChatPanel() {
-  document.getElementById("agent-panel").classList.remove("active");
-  document.getElementById("chat-panel").classList.add("active");
+function toggleAgentSection() {
+  const body = document.getElementById("agent-section-body");
+  const toggle = document.getElementById("agent-toggle");
+  const isOpen = !body.classList.contains("hidden");
+  body.classList.toggle("hidden", isOpen);
+  toggle.setAttribute("aria-expanded", String(!isOpen));
 }
 
 function agentLog(status, text) {
@@ -2344,6 +2349,7 @@ async function startAgentLoop() {
   const task = taskInput.value.trim();
   if (!task) return;
 
+  openAgentSection();
   document.getElementById("agent-log").innerHTML = "";
   document.getElementById("agent-confirm-bar").classList.add("hidden");
   setAgentRunning(true);
@@ -2380,11 +2386,7 @@ function stopAgentLoop() {
 }
 
 function initAgentTab() {
-  document.getElementById("agent-btn").addEventListener("click", showAgentPanel);
-  document.getElementById("agent-back-btn").addEventListener("click", () => {
-    if (agentRunning) return;
-    showChatPanel();
-  });
+  document.getElementById("agent-toggle").addEventListener("click", toggleAgentSection);
   document.getElementById("agent-start-btn").addEventListener("click", startAgentLoop);
   document.getElementById("agent-stop-btn").addEventListener("click", stopAgentLoop);
 
