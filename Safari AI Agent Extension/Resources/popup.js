@@ -57,6 +57,7 @@ let pageContextMode = "auto"; // "auto" | "on" | "off"
 let pageContextUsedInConversation = false;
 let lastDisplayedModel = null;
 let pendingImageData = null; // { base64: string, mimeType: string } | null
+let agentRunning = false;
 
 // ── Storage Helpers ───────────────────────────────────────────
 async function loadSettings() {
@@ -2178,6 +2179,92 @@ async function init() {
       document.getElementById("user-input").value = msg.prompt;
       document.getElementById("send-btn").disabled = false;
       document.getElementById("user-input").focus();
+    }
+  });
+  initAgentTab();
+}
+
+// ── Agent Tab ─────────────────────────────────────────────────
+function showAgentPanel() {
+  document.getElementById("chat-panel").classList.remove("active");
+  document.getElementById("agent-panel").classList.add("active");
+}
+
+function showChatPanel() {
+  document.getElementById("agent-panel").classList.remove("active");
+  document.getElementById("chat-panel").classList.add("active");
+}
+
+function agentLog(status, text) {
+  const log = document.getElementById("agent-log");
+  const entry = document.createElement("div");
+  entry.className = `agent-log-entry status-${status}`;
+  entry.innerHTML = `<span class="agent-log-icon"></span><span>${text}</span>`;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+function setAgentRunning(running) {
+  agentRunning = running;
+  document.getElementById("agent-start-btn").disabled = running;
+  document.getElementById("agent-stop-btn").classList.toggle("hidden", !running);
+  document.getElementById("agent-start-btn").classList.toggle("hidden", running);
+}
+
+async function startAgentLoop() {
+  const taskInput = document.getElementById("agent-task-input");
+  const task = taskInput.value.trim();
+  if (!task) return;
+
+  document.getElementById("agent-log").innerHTML = "";
+  setAgentRunning(true);
+
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  const tabId = tabs?.[0]?.id;
+  if (!tabId) { agentLog("error", "Kein aktiver Tab gefunden."); setAgentRunning(false); return; }
+
+  const response = await browser.runtime.sendMessage({
+    type: "AGENT_START",
+    task,
+    tabId,
+    providerId: settings.provider,
+    model: settings.model || settings.customModel,
+    apiKey: settings.apiKey,
+    baseUrl: settings.baseUrl
+  });
+
+  if (!response?.ok) {
+    agentLog("error", response?.error ?? "Konnte Agent nicht starten.");
+    setAgentRunning(false);
+  }
+}
+
+function stopAgentLoop() {
+  browser.runtime.sendMessage({ type: "AGENT_STOP" });
+}
+
+function initAgentTab() {
+  document.getElementById("agent-btn").addEventListener("click", showAgentPanel);
+  document.getElementById("agent-back-btn").addEventListener("click", showChatPanel);
+  document.getElementById("agent-start-btn").addEventListener("click", startAgentLoop);
+  document.getElementById("agent-stop-btn").addEventListener("click", stopAgentLoop);
+
+  document.getElementById("agent-confirm-yes").addEventListener("click", () => {
+    document.getElementById("agent-confirm-bar").classList.add("hidden");
+    browser.runtime.sendMessage({ type: "AGENT_CONFIRM_RESPONSE", confirmed: true });
+  });
+
+  document.getElementById("agent-confirm-no").addEventListener("click", () => {
+    document.getElementById("agent-confirm-bar").classList.add("hidden");
+    browser.runtime.sendMessage({ type: "AGENT_CONFIRM_RESPONSE", confirmed: false });
+  });
+
+  browser.runtime.onMessage.addListener((msg) => {
+    if (msg.type === "AGENT_LOG") { agentLog(msg.status, msg.text); return; }
+    if (msg.type === "AGENT_DONE") { setAgentRunning(false); return; }
+    if (msg.type === "AGENT_CONFIRM_REQUEST") {
+      document.getElementById("agent-confirm-text").textContent = `Bestätigen: ${msg.actionText}`;
+      document.getElementById("agent-confirm-bar").classList.remove("hidden");
     }
   });
 }
