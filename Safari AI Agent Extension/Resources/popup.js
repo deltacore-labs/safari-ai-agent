@@ -903,10 +903,19 @@ async function fetchPageContent() {
       target: { tabId: tab.id },
       func: () => {
         const rawText = document.body?.innerText ?? "";
+        const rootHost = location.hostname;
+        const links = Array.from(document.querySelectorAll("a[href]"))
+          .map(a => { try { return new URL(a.href).href; } catch { return null; } })
+          .filter(href => {
+            if (!href) return false;
+            if (!/^https?:\/\//.test(href)) return false;
+            try { return new URL(href).hostname === rootHost; } catch { return false; }
+          });
         return {
           text: rawText.length > 50000 ? rawText.slice(0, 50000) + "\n...[truncated]" : rawText,
           title: document.title,
-          url: window.location.href
+          url: window.location.href,
+          links: [...new Set(links)]
         };
       }
     });
