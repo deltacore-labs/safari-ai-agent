@@ -932,11 +932,11 @@ async function fetchPageContent() {
 }
 
 // ── Subpage Auto-Fetch ────────────────────────────────────────
-const SUBPAGE_KEYWORDS_RE = /(?:^|[\s.,!?;:()"'])(?:hole|hol|öffne|zeig|lies|lese|fetch|load|open|show|artikel|article|unterseite|subpage|inhalt|content|details|mehr\s+dazu|vollständig|complete|was\s+steht\s+(?:im|in\s+dem|dort|da))(?:[\s.,!?;:()"']|$)/i;
+const SUBPAGE_KEYWORDS_RE = /(?:^|[\s.,!?;:()"'])(?:hole|hol|öffne|zeig|lies|lese|fetch|artikel|article|unterseite|subpage|inhalt|mehr\s+dazu|vollständig|was\s+steht\s+(?:im|in\s+dem|dort|da))(?:[\s.,!?;:()"']|$)/i;
 
 async function classifySubpageNeed(text) {
   const providerId = settings.provider;
-  const model = providerId === "local" ? settings.customModel : settings.model;
+  const model = (providerId === "local" || providerId === "hyperspace") ? settings.customModel : settings.model;
   if (!model) return false;
   if (!settings.apiKey && providerId !== "local") return false;
   if ((providerId === "local" || providerId === "hyperspace") && !settings.baseUrl) return false;
@@ -1841,9 +1841,14 @@ async function sendMessage() {
               .map(p => `---\n${p.title}\n${p.url}\n${p.text.slice(0, 3000)}`)
               .join("\n\n");
             currentPageContext = { ...currentPageContext, text: currentPageContext.text + "\n\n" + subText };
+            pageContextUsedInConversation = true;
             renderContextModeNotice(`✅ ${subpages.length} Unterseite${subpages.length > 1 ? "n" : ""} geladen`);
             scrollToBottom();
+          } else {
+            renderContextModeNotice("");
           }
+        } else {
+          renderContextModeNotice("");
         }
       }
     }
