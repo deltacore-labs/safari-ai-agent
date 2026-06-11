@@ -1827,6 +1827,28 @@ async function sendMessage() {
     }
     // ─────────────────────────────────────────────────────────
 
+    // ── Subpage Auto-Fetch ────────────────────────────────────
+    if (!detectedUrl && currentPageContext?.links?.length > 0 && pageContextMode !== "off") {
+      const shouldLoad = await shouldLoadSubpages(text);
+      if (shouldLoad) {
+        renderContextModeNotice("🔗 Unterseiten werden geladen…");
+        scrollToBottom();
+        const selectedUrls = await selectRelevantLinks(currentPageContext, currentPageContext.links, text);
+        if (selectedUrls.length > 0) {
+          const subpages = (await Promise.all(selectedUrls.map(fetchUrlContent))).filter(Boolean);
+          if (subpages.length > 0) {
+            const subText = subpages
+              .map(p => `---\n${p.title}\n${p.url}\n${p.text.slice(0, 3000)}`)
+              .join("\n\n");
+            currentPageContext = { ...currentPageContext, text: currentPageContext.text + "\n\n" + subText };
+            renderContextModeNotice(`✅ ${subpages.length} Unterseite${subpages.length > 1 ? "n" : ""} geladen`);
+            scrollToBottom();
+          }
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────
+
     const includeCtx = pageContextMode === "on"
       ? true
       : pageContextMode === "off"
