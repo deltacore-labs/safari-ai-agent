@@ -928,6 +928,62 @@ function extractUrlFromText(text) {
   return match[0].replace(/[.,)\]]+$/, "");
 }
 
+// ── Background Tab Fetch ──────────────────────────────────────
+async function fetchUrlContent(url) {
+  let tabId = null;
+  try {
+    const tab = await browser.tabs.create({ url, active: false });
+    tabId = tab.id;
+
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("timeout")), 10000);
+      function onUpdated(id, info) {
+        if (id !== tabId) return;
+        if (info.status === "complete") {
+          clearTimeout(timer);
+          browser.tabs.onUpdated.removeListener(onUpdated);
+          resolve();
+        }
+      }
+      browser.tabs.onUpdated.addListener(onUpdated);
+    });
+
+    const results = await browser.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const rawText = document.body?.innerText ?? "";
+        const rootHost = location.hostname;
+        const links = Array.from(document.querySelectorAll("a[href]"))
+          .map(a => {
+            try { return new URL(a.href).href; } catch { return null; }
+          })
+          .filter(href => {
+            if (!href) return false;
+            if (!/^https?:\/\//.test(href)) return false;
+            try { return new URL(href).hostname === rootHost; } catch { return false; }
+          });
+        const uniqueLinks = [...new Set(links)];
+        return {
+          text: rawText.length > 50000 ? rawText.slice(0, 50000) + "\n...[truncated]" : rawText,
+          title: document.title,
+          url: location.href,
+          links: uniqueLinks
+        };
+      }
+    });
+
+    const data = results?.[0]?.result;
+    if (!data || !data.text.trim()) return null;
+    return data;
+  } catch {
+    return null;
+  } finally {
+    if (tabId !== null) {
+      try { await browser.tabs.remove(tabId); } catch { /* ignore */ }
+    }
+  }
+}
+
 // ── Page-Context Detection ────────────────────────────────────
 const PAGE_KEYWORDS_RE = /\b(diese[rn]?\s+(?:seite|artikel|text|inhalt|webseite)|was\s+steht\s+(?:hier|da|dort)|(?:hier|da|dort)\s+steht|auf\s+der\s+(?:seite|webseite)|den\s+text|dem\s+artikel|fasse\s+zusammen|zusammenfassung|der\s+webseite|der\s+seite|übersetze\s+(?:das|den|die|mir)|erkläre\s+mir\s+das|this\s+page|the\s+article|what\s+does\s+it\s+say|summarize\s+this|translate\s+this)\b/i;
 
