@@ -932,7 +932,7 @@ async function fetchPageContent() {
 }
 
 // ── Subpage Auto-Fetch ────────────────────────────────────────
-const SUBPAGE_KEYWORDS_RE = /\b(hole|hol\b|öffne|zeig|lies|lese|fetch|load|open|show|artikel|article|unterseite|subpage|inhalt|content|details|mehr\s+dazu|vollständig|complete|was\s+steht\s+(im|in\s+dem|dort|da))\b/i;
+const SUBPAGE_KEYWORDS_RE = /(?:^|[\s.,!?;:()"'])(?:hole|hol|öffne|zeig|lies|lese|fetch|load|open|show|artikel|article|unterseite|subpage|inhalt|content|details|mehr\s+dazu|vollständig|complete|was\s+steht\s+(?:im|in\s+dem|dort|da))(?:[\s.,!?;:()"']|$)/i;
 
 async function classifySubpageNeed(text) {
   const providerId = settings.provider;
