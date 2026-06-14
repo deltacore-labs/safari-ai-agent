@@ -13,7 +13,7 @@ export function t(key, ...args) {
   const dict = TRANSLATIONS[currentLang] ?? TRANSLATIONS.de;
   let str = dict[key] ?? TRANSLATIONS.de[key] ?? key;
   args.forEach((val, i) => {
-    str = str.replace(`%${i + 1}`, val);
+    str = str.replace(new RegExp(`%${i + 1}`, 'g'), val);
   });
   return str;
 }
