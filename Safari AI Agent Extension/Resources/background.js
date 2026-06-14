@@ -1,18 +1,31 @@
-const MENU_ITEMS = [
-  { id: "ai-explain",   title: "Mit AI erklären" },
-  { id: "ai-translate", title: "Mit AI übersetzen" },
-  { id: "ai-summarize", title: "Mit AI zusammenfassen" }
-];
+import { t, setLanguage } from "./i18n.js";
 
-const PROMPTS = {
-  "ai-explain":   (text) => `Erkläre mir bitte Folgendes kurz und verständlich:\n\n"${text}"`,
-  "ai-translate": (text) => `Übersetze den folgenden Text auf Deutsch:\n\n"${text}"`,
-  "ai-summarize": (text) => `Fasse den folgenden Text in 2-3 Sätzen zusammen:\n\n"${text}"`
-};
+async function loadLang() {
+  const result = await browser.storage.local.get(["settings"]);
+  const lang = result?.settings?.language ?? "de";
+  setLanguage(lang);
+}
 
-browser.runtime.onInstalled.addListener(() => {
+function getMenuItems() {
+  return [
+    { id: "ai-explain",   title: t("menu_explain") },
+    { id: "ai-translate", title: t("menu_translate") },
+    { id: "ai-summarize", title: t("menu_summarize") }
+  ];
+}
+
+function getPrompts() {
+  return {
+    "ai-explain":   (text) => t("prompt_explain", text),
+    "ai-translate": (text) => t("prompt_translate", text),
+    "ai-summarize": (text) => t("prompt_summarize", text)
+  };
+}
+
+browser.runtime.onInstalled.addListener(async () => {
+  await loadLang();
   browser.contextMenus.removeAll().then(() => {
-    for (const item of MENU_ITEMS) {
+    for (const item of getMenuItems()) {
       browser.contextMenus.create({
         id: item.id,
         title: item.title,
@@ -23,7 +36,8 @@ browser.runtime.onInstalled.addListener(() => {
 });
 
 browser.contextMenus.onClicked.addListener(async (info) => {
-  const buildPrompt = PROMPTS[info.menuItemId];
+  await loadLang();
+  const buildPrompt = getPrompts()[info.menuItemId];
   if (!buildPrompt || !info.selectionText) return;
   const MAX_SELECTION = 8000;
   const text = info.selectionText.trim().slice(0, MAX_SELECTION);
@@ -39,6 +53,8 @@ browser.contextMenus.onClicked.addListener(async (info) => {
 // ── Agent Loop ────────────────────────────────────────────────
 let agentRunning = false;
 let agentAbort = false;
+let agentAbortController = null;
+let pendingConfirmResolver = null;
 const AGENT_MAX_ITERATIONS = 30;
 const AGENT_ACTION_TIMEOUT_MS = 60000;
 
@@ -46,11 +62,13 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "AGENT_START") {
     if (agentRunning) { sendResponse({ ok: false, error: "already running" }); return true; }
     agentAbort = false;
+    agentAbortController = new AbortController();
     agentRunning = true;
     runAgentLoop(message.task, message.tabId, message.providerId, message.model, message.apiKey, message.baseUrl)
-      .catch(e => notifyPopup({ type: "AGENT_LOG", status: "error", text: `Fehler: ${e.message}` }))
+      .catch(e => notifyPopup({ type: "AGENT_LOG", status: "error", text: t("agent_error_prefix", e.message) }))
       .finally(() => {
         agentRunning = false;
+        agentAbortController = null;
         notifyPopup({ type: "AGENT_DONE" });
       });
     sendResponse({ ok: true });
@@ -59,6 +77,25 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "AGENT_STOP") {
     agentAbort = true;
+    // Abort any in-flight fetch immediately so the loop's iteration check
+    // doesn't have to wait for the model to finish responding.
+    if (agentAbortController) {
+      try { agentAbortController.abort(); } catch { /* already aborted */ }
+    }
+    // Resolve any pending confirmation as denied so the loop can advance.
+    if (pendingConfirmResolver) {
+      pendingConfirmResolver(false);
+      pendingConfirmResolver = null;
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === "LANGUAGE_CHANGED") {
+    setLanguage(message.language ?? "de");
+    for (const item of getMenuItems()) {
+      browser.contextMenus.update(item.id, { title: item.title }).catch(() => {});
+    }
     sendResponse({ ok: true });
     return true;
   }
@@ -71,11 +108,12 @@ function notifyPopup(msg) {
 }
 
 async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
-  notifyPopup({ type: "AGENT_LOG", status: "thinking", text: "Analysiere Seite…" });
+  await loadLang();
+  notifyPopup({ type: "AGENT_LOG", status: "thinking", text: t("agent_analyzing") });
 
   for (let i = 0; i < AGENT_MAX_ITERATIONS; i++) {
     if (agentAbort) {
-      notifyPopup({ type: "AGENT_LOG", status: "info", text: "Abgebrochen." });
+      notifyPopup({ type: "AGENT_LOG", status: "info", text: t("agent_aborted") });
       return;
     }
 
@@ -85,7 +123,7 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
       const tabInfo = await browser.tabs.get(tabId);
       screenshotDataUrl = await browser.tabs.captureVisibleTab(tabInfo.windowId, { format: "jpeg", quality: 70 });
     } catch (e) {
-      notifyPopup({ type: "AGENT_LOG", status: "error", text: `Screenshot fehlgeschlagen: ${e.message}` });
+      notifyPopup({ type: "AGENT_LOG", status: "error", text: t("agent_screenshot_fail", e.message) });
     }
 
     // 2. DOM
@@ -96,17 +134,27 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
       domElements = domResult?.elements ?? [];
       pageUrl = domResult?.url ?? "";
     } catch (e) {
-      notifyPopup({ type: "AGENT_LOG", status: "error", text: `DOM-Extraktion fehlgeschlagen: ${e.message}` });
+      notifyPopup({ type: "AGENT_LOG", status: "error", text: t("agent_dom_fail", e.message) });
     }
 
     // 3. AI-Call
-    const aiResponse = await callAgentAI({
-      task, domElements, pageUrl, iteration: i,
-      screenshotDataUrl, providerId, model, apiKey, baseUrl
-    });
+    let aiResponse;
+    try {
+      aiResponse = await callAgentAI({
+        task, domElements, pageUrl, iteration: i,
+        screenshotDataUrl, providerId, model, apiKey, baseUrl
+      });
+    } catch (e) {
+      if (e?.name === "AbortError") {
+        notifyPopup({ type: "AGENT_LOG", status: "info", text: t("agent_aborted") });
+        return;
+      }
+      notifyPopup({ type: "AGENT_LOG", status: "error", text: t("agent_ai_fail", e.message) });
+      return;
+    }
 
     if (!aiResponse) {
-      notifyPopup({ type: "AGENT_LOG", status: "error", text: "AI-Antwort konnte nicht gelesen werden." });
+      notifyPopup({ type: "AGENT_LOG", status: "error", text: t("agent_no_response") });
       return;
     }
 
@@ -117,11 +165,11 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     if (action === "click" && isSubmitElement(selector, domElements)) {
       const confirmed = await requestConfirmation(logText);
       if (agentAbort) {
-        notifyPopup({ type: "AGENT_LOG", status: "info", text: "Abgebrochen." });
+        notifyPopup({ type: "AGENT_LOG", status: "info", text: t("agent_aborted") });
         return;
       }
       if (!confirmed) {
-        notifyPopup({ type: "AGENT_LOG", status: "info", text: "Aktion abgebrochen (nicht bestätigt)." });
+        notifyPopup({ type: "AGENT_LOG", status: "info", text: t("agent_not_confirmed") });
         continue;
       }
     }
@@ -129,7 +177,7 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     notifyPopup({ type: "AGENT_LOG", status: "running", text: logText });
 
     if (action === "done") {
-      notifyPopup({ type: "AGENT_LOG", status: "success", text: `Erledigt: ${summary || "Aufgabe abgeschlossen"}` });
+      notifyPopup({ type: "AGENT_LOG", status: "success", text: t("agent_done", summary || t("agent_done_default")) });
       return;
     }
 
@@ -150,25 +198,25 @@ async function runAgentLoop(task, tabId, providerId, model, apiKey, baseUrl) {
     ]).catch(e => ({ ok: false, error: e.message }));
 
     if (!actionResult?.ok) {
-      notifyPopup({ type: "AGENT_LOG", status: "error", text: `Fehler bei "${action}": ${actionResult?.error ?? "unbekannt"}` });
+      notifyPopup({ type: "AGENT_LOG", status: "error", text: t("agent_action_error", action, actionResult?.error ?? t("agent_action_unknown")) });
     }
 
     // Kurz warten damit Seite reagieren kann
     await new Promise(r => setTimeout(r, 600));
   }
 
-  notifyPopup({ type: "AGENT_LOG", status: "error", text: `Maximale Iterationen (${AGENT_MAX_ITERATIONS}) erreicht.` });
+  notifyPopup({ type: "AGENT_LOG", status: "error", text: t("agent_max_iter", AGENT_MAX_ITERATIONS) });
 }
 
 function buildLogText(aiResponse) {
   const { action, selector, value, direction, summary } = aiResponse;
-  if (action === "click") return `Klicke auf ${selector}`;
-  if (action === "type") return `Tippe "${value}" in ${selector}`;
-  if (action === "scroll") return `Scrolle ${direction}`;
-  if (action === "select") return `Wähle "${value}" in ${selector}`;
-  if (action === "navigate") return `Navigiere zu ${aiResponse.url}`;
-  if (action === "wait") return `Warte ${aiResponse.ms}ms…`;
-  if (action === "done") return `Erledigt: ${summary || ""}`;
+  if (action === "click")    return t("agent_click_log", selector);
+  if (action === "type")     return t("agent_type_log", value, selector);
+  if (action === "scroll")   return t("agent_scroll_log", direction);
+  if (action === "select")   return t("agent_select_log", value, selector);
+  if (action === "navigate") return t("agent_navigate_log", aiResponse.url);
+  if (action === "wait")     return t("agent_wait_log", aiResponse.ms);
+  if (action === "done")     return t("agent_done", summary || "");
   return action;
 }
 
@@ -180,15 +228,31 @@ function isSubmitElement(selector, domElements) {
 
 async function requestConfirmation(actionText) {
   return new Promise(resolve => {
+    let timeoutId;
     const handler = (msg) => {
       if (msg.type === "AGENT_CONFIRM_RESPONSE") {
+        clearTimeout(timeoutId);
         browser.runtime.onMessage.removeListener(handler);
+        pendingConfirmResolver = null;
         resolve(msg.confirmed);
       }
     };
+    // Expose resolver to AGENT_STOP so a stop-click during confirmation
+    // unblocks the loop instantly instead of waiting up to 30s.
+    pendingConfirmResolver = (val) => {
+      clearTimeout(timeoutId);
+      browser.runtime.onMessage.removeListener(handler);
+      resolve(val);
+    };
     browser.runtime.onMessage.addListener(handler);
     notifyPopup({ type: "AGENT_CONFIRM_REQUEST", actionText });
-    setTimeout(() => { browser.runtime.onMessage.removeListener(handler); resolve(false); }, 30000);
+    timeoutId = setTimeout(() => {
+      browser.runtime.onMessage.removeListener(handler);
+      if (pendingConfirmResolver) {
+        pendingConfirmResolver = null;
+        resolve(false);
+      }
+    }, 30000);
   });
 }
 
@@ -196,8 +260,16 @@ async function callAgentAI({ task, domElements, pageUrl, iteration, screenshotDa
   if (baseUrl) {
     try {
       const u = new URL(baseUrl);
-      if (!['https:', 'http:'].includes(u.protocol)) {
-        throw new Error("disallowed protocol in baseUrl");
+      // Only https is allowed broadly. Plain http is permitted only for
+      // localhost-style hosts so a misconfigured remote URL can't leak the
+      // API key + screenshot + DOM in plaintext.
+      const isLocalhost = ['localhost', '127.0.0.1', '[::1]', '::1'].includes(u.hostname);
+      if (u.protocol === 'https:') {
+        // ok
+      } else if (u.protocol === 'http:' && isLocalhost) {
+        // ok
+      } else {
+        throw new Error("disallowed protocol in baseUrl (https or http://localhost only)");
       }
     } catch (e) {
       throw new Error(`Invalid baseUrl: ${e.message}`);
@@ -208,16 +280,7 @@ async function callAgentAI({ task, domElements, pageUrl, iteration, screenshotDa
     `[${e.index}] ${e.tag}${e.type ? `[type=${e.type}]` : ""}${e.id ? `#${e.id}` : ""}${e.label ? ` "${e.label}"` : ""} → ${e.selector}`
   ).join("\n");
 
-  const systemPrompt = `Du bist ein Web-Automatisierungs-Agent. Du erhältst einen Screenshot und eine Liste interaktiver Elemente der aktuellen Seite sowie eine Aufgabe.
-Antworte NUR mit einem JSON-Objekt (kein Markdown, kein Text drumherum) mit genau einem der folgenden Formate:
-- {"action":"click","selector":"<css-selektor>","reason":"<warum>"}
-- {"action":"type","selector":"<css-selektor>","value":"<text>","reason":"<warum>"}
-- {"action":"scroll","direction":"down"|"up","amount":300,"reason":"<warum>"}
-- {"action":"select","selector":"<css-selektor>","value":"<option-value>","reason":"<warum>"}
-- {"action":"navigate","url":"<url>","reason":"<warum>"}
-- {"action":"wait","ms":1000,"reason":"<warum>"}
-- {"action":"done","summary":"<was wurde erreicht>"}
-Verwende nur Selektoren aus der DOM-Liste. Wenn du unsicher bist, wähle "scroll" oder "wait".`;
+  const systemPrompt = t("agent_sys_prompt");
 
   const userContent = [];
 
@@ -230,66 +293,74 @@ Verwende nur Selektoren aus der DOM-Liste. Wenn du unsicher bist, wähle "scroll
 
   userContent.push({
     type: "text",
-    text: `Aufgabe: ${task}\nIteration: ${iteration + 1}/${AGENT_MAX_ITERATIONS}\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}`
+    text: t("agent_task_label", task, iteration + 1, AGENT_MAX_ITERATIONS, pageUrl, domSummary || t("agent_no_elements"))
   });
 
-  try {
-    if (providerId === "anthropic") {
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userContent }]
-        })
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err?.error?.message ?? `HTTP ${resp.status}`);
-      }
-      const data = await resp.json();
-      const text = data?.content?.[0]?.text ?? "";
-      const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-      return JSON.parse(stripped);
-    } else {
-      // OpenAI-compatible (openai, hyperspace, local)
-      const messages = [
-        { role: "system", content: systemPrompt },
-        {
-          role: "user",
-          content: screenshotDataUrl ? [
-            { type: "image_url", image_url: { url: screenshotDataUrl } },
-            { type: "text", text: `Aufgabe: ${task}\nIteration: ${iteration + 1}/${AGENT_MAX_ITERATIONS}\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}` }
-          ] : `Aufgabe: ${task}\nIteration: ${iteration + 1}/${AGENT_MAX_ITERATIONS}\nURL: ${pageUrl}\n\nInteraktive Elemente:\n${domSummary || "(keine gefunden)"}`
-        }
-      ];
-      const endpoint = baseUrl
-        ? `${baseUrl.replace(/\/$/, "")}/chat/completions`
-        : "https://api.openai.com/v1/chat/completions";
-      const resp = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ model, max_tokens: 1024, messages })
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err?.error?.message ?? `HTTP ${resp.status}`);
-      }
-      const data = await resp.json();
-      const text = data?.choices?.[0]?.message?.content ?? "";
-      const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
-      return JSON.parse(stripped);
+  const signal = agentAbortController?.signal;
+
+  if (providerId === "anthropic") {
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-allow-browser": "true",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userContent }]
+      }),
+      signal
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err?.error?.message ?? `HTTP ${resp.status}`);
     }
-  } catch (e) {
-    return null;
+    const data = await resp.json();
+    const text = data?.content?.[0]?.text ?? "";
+    const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    try {
+      return JSON.parse(stripped);
+    } catch (e) {
+      throw new Error(t("agent_json_parse_error", stripped.slice(0, 80) + "…"));
+    }
+  } else {
+    // OpenAI-compatible (openai, hyperspace, local)
+    const messages = [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: screenshotDataUrl ? [
+          { type: "image_url", image_url: { url: screenshotDataUrl } },
+          { type: "text", text: t("agent_task_label", task, iteration + 1, AGENT_MAX_ITERATIONS, pageUrl, domSummary || t("agent_no_elements")) }
+        ] : t("agent_task_label", task, iteration + 1, AGENT_MAX_ITERATIONS, pageUrl, domSummary || t("agent_no_elements"))
+      }
+    ];
+    const endpoint = baseUrl
+      ? `${baseUrl.replace(/\/$/, "")}/chat/completions`
+      : "https://api.openai.com/v1/chat/completions";
+    const headers = { "Content-Type": "application/json" };
+    if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+    const resp = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model, max_tokens: 2048, messages }),
+      signal
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err?.error?.message ?? `HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    const text = data?.choices?.[0]?.message?.content ?? "";
+    const stripped = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    try {
+      return JSON.parse(stripped);
+    } catch (e) {
+      throw new Error(t("agent_json_parse_error", stripped.slice(0, 80) + "…"));
+    }
   }
 }
