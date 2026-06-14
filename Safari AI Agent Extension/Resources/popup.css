@@ -1,5 +1,6 @@
 /* ── Fonts ───────────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap');
+/* Geist is loaded via <link> in popup.html — no @import here, that would
+   double-fetch the same stylesheet sequentially. */
 
 /* ── Base Tokens (Intercom / Hyperspace / default) ───────────── */
 :root {
@@ -116,8 +117,12 @@ html, body {
   background: var(--color-canvas);
   transform: translateX(100%);
   transition: transform 280ms cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: transform;
 }
+
+/* Promote to GPU layer only while a slide is actually happening — leaving
+   will-change on permanently bloats GPU memory across the popup lifetime. */
+.panel.active,
+.panel.slide-left { will-change: transform; }
 
 .panel.active           { transform: translateX(0); }
 .panel.slide-left       { transform: translateX(-30%); }
@@ -207,7 +212,8 @@ html, body {
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-xs);
-  scroll-behavior: smooth;
+  /* No scroll-behavior:smooth — JS auto-scroll uses scrollTop = scrollHeight
+     and would otherwise fight with smooth-scroll animation every flush. */
 }
 
 .messages-list::-webkit-scrollbar { width: 4px; }
@@ -880,11 +886,11 @@ html, body {
   border: 1px solid rgba(214, 93, 65, 0.25);
   border-radius: 8px;
   font-size: 12px;
-  color: var(--text-secondary, #888);
+  color: var(--color-ink-muted);
 }
 
 .claude-config-badge svg {
-  color: #d65d41;
+  color: var(--color-accent);
   flex-shrink: 0;
 }
 
@@ -1025,7 +1031,7 @@ html, body {
 
 /* ── Agent Section (inline collapsible) ─────────────────────── */
 .agent-section {
-  border-top: 1px solid var(--border-color, #e5e5e5);
+  border-top: 1px solid var(--color-hairline);
   flex-shrink: 0;
 }
 
@@ -1039,12 +1045,12 @@ html, body {
   border: none;
   cursor: pointer;
   font-size: 12px;
-  color: var(--text-secondary, #666);
+  color: var(--color-ink-muted);
   font-family: inherit;
 }
 
 .agent-toggle:hover {
-  background: var(--surface-2, #f5f5f5);
+  background: var(--color-surface-2);
 }
 
 .agent-chevron {
@@ -1069,7 +1075,7 @@ html, body {
   align-items: flex-start;
   gap: 8px;
   line-height: 1.4;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--color-ink);
 }
 
 .agent-log-entry .agent-log-icon {
@@ -1085,8 +1091,8 @@ html, body {
 .agent-log-entry.status-info     .agent-log-icon::before { content: "ℹ"; }
 
 .agent-confirm-bar {
-  background: var(--surface-2, #f5f5f5);
-  border-top: 1px solid var(--border, #e0e0e0);
+  background: var(--color-surface-2);
+  border-top: 1px solid var(--color-hairline);
   padding: 10px 14px;
 }
 
@@ -1095,7 +1101,7 @@ html, body {
 .agent-confirm-text {
   font-size: 13px;
   margin: 0 0 8px;
-  color: var(--text-primary, #1a1a1a);
+  color: var(--color-ink);
 }
 
 .agent-confirm-actions {
@@ -1113,13 +1119,13 @@ html, body {
   font-weight: 500;
 }
 
-.agent-confirm-yes { background: #3b82f6; color: white; }
-.agent-confirm-yes:hover { background: #2563eb; }
-.agent-confirm-no  { background: var(--surface-3, #e5e5e5); color: var(--text-primary, #1a1a1a); }
-.agent-confirm-no:hover  { background: var(--surface-4, #d5d5d5); }
+.agent-confirm-yes { background: var(--color-accent); color: white; }
+.agent-confirm-yes:hover { filter: brightness(1.08); }
+.agent-confirm-no  { background: var(--color-surface-2); color: var(--color-ink); border: 1px solid var(--color-hairline); }
+.agent-confirm-no:hover  { background: var(--color-hairline-soft); }
 
 .agent-input-row {
-  border-top: 1px solid var(--border, #e0e0e0);
+  border-top: 1px solid var(--color-hairline);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
@@ -1129,18 +1135,18 @@ html, body {
 .agent-task-input {
   width: 100%;
   resize: none;
-  border: 1px solid var(--border, #e0e0e0);
+  border: 1px solid var(--color-hairline);
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 13px;
   font-family: inherit;
-  background: var(--surface-1, #fff);
-  color: var(--text-primary, #1a1a1a);
+  background: var(--color-surface-1);
+  color: var(--color-ink);
   box-sizing: border-box;
   outline: none;
 }
 
-.agent-task-input:focus { border-color: #3b82f6; }
+.agent-task-input:focus { border-color: var(--color-accent); }
 
 .agent-input-actions {
   display: flex;
@@ -1149,7 +1155,7 @@ html, body {
 
 .agent-start-btn {
   flex: 1;
-  background: #3b82f6;
+  background: var(--color-accent);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1159,12 +1165,12 @@ html, body {
   cursor: pointer;
 }
 
-.agent-start-btn:hover { background: #2563eb; }
-.agent-start-btn:disabled { background: #93c5fd; cursor: not-allowed; }
+.agent-start-btn:hover { filter: brightness(1.08); }
+.agent-start-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .agent-stop-btn {
   flex: 1;
-  background: #ef4444;
+  background: var(--color-error);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1174,5 +1180,5 @@ html, body {
   cursor: pointer;
 }
 
-.agent-stop-btn:hover { background: #dc2626; }
+.agent-stop-btn:hover { filter: brightness(1.08); }
 .agent-stop-btn.hidden { display: none; }

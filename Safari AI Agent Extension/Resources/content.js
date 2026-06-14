@@ -35,7 +35,15 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.action === "AGENT_HIGHLIGHT") {
     const { selector, actionType } = message;
-    const el = document.querySelector(selector);
+    let el;
+    try {
+      el = document.querySelector(selector);
+    } catch (e) {
+      // Invalid selector → DOMException. Without try/catch the response is
+      // never sent and the MessageChannel hangs until garbage-collection.
+      sendResponse({ ok: false, error: `invalid selector: ${e.message}` });
+      return true;
+    }
     if (!el) { sendResponse({ ok: false }); return true; }
     const color = actionType === "type" ? "#f97316" : "#3b82f6";
     const label = actionType === "type" ? "Tippe…" : actionType === "click" ? "Klicke…" : actionType;
