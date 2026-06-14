@@ -1713,7 +1713,7 @@ async function callGemini(messages, includeCtx = false, webContext = null, signa
   }
 
   const json = await response.json();
-  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "(Keine Antwort)";
+  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? t("gemini_no_response");
 }
 
 // ── Streaming Flush Helper ────────────────────────────────────
@@ -1933,7 +1933,7 @@ async function sendMessage() {
     // Show model tag if model changed since last message
     const currentModel = settings.model || settings.customModel || "?";
     if (currentModel !== lastDisplayedModel) {
-      const providerName = PROVIDERS[settings.provider]?.name ?? settings.provider;
+      const providerName = settings.provider === "local" ? t("provider_local") : (PROVIDERS[settings.provider]?.name ?? settings.provider);
       // Strip vendor prefixes like "anthropic--" or "openai/" for readability
       const displayModel = currentModel.replace(/^[a-z]+--/i, "").replace(/^[a-z]+\//i, "");
       renderModelTag(`${providerName} · ${displayModel}`);

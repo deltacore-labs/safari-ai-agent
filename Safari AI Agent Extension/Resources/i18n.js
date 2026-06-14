@@ -126,6 +126,7 @@ const TRANSLATIONS = {
     api_hint_enter_url: "Base URL eingeben um Modelle zu laden",
     api_hint_not_found: "Base URL nicht gefunden",
     gemini_no_image: "Bildübertragung wird von Gemini in diesem Modus noch nicht unterstützt.",
+    gemini_no_response: "(Keine Antwort)",
     // Page context notices
     ctx_mode_auto: "Seitenkontext: Auto",
     ctx_mode_on: "Seitenkontext: Seite",
@@ -278,6 +279,7 @@ const TRANSLATIONS = {
     api_hint_enter_url: "Enter Base URL to load models",
     api_hint_not_found: "Base URL not found",
     gemini_no_image: "Image transfer is not yet supported for Gemini in this mode.",
+    gemini_no_response: "(No response)",
     // Page context notices
     ctx_mode_auto: "Page context: Auto",
     ctx_mode_on: "Page context: Page",
