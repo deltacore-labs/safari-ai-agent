@@ -106,6 +106,16 @@ body::after {
 }
 .btn-ghost:hover { border-color: rgba(255,255,255,0.2); }
 
+/* App Store Badge */
+.appstore-badge {
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+.appstore-badge:hover { opacity: 0.85; transform: translateY(-1px); }
+.appstore-badge:active { transform: translateY(0); opacity: 1; }
+.appstore-badge img { display: block; }
+
 .btn:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--accent);
