@@ -18,9 +18,20 @@
   <nav class="nav">
     <div class="container nav-inner">
       <a href="index.html" class="nav-logo">Ask<span>Safari</span></a>
-      <a href="#" class="appstore-badge nav-badge" aria-label="Im App Store laden">
-        <img src="Download_on_the_App_Store_Badge_DE_RGB_wht_092917.svg" alt="Laden im App Store" height="36">
-      </a>
+      <div class="nav-right">
+        <button class="lang-toggle" id="langToggle" aria-label="Sprache wechseln">
+          <span class="lang-option" data-lang="de">DE</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-option" data-lang="en">EN</span>
+        </button>
+        <a href="#" class="appstore-badge nav-badge" aria-label="Im App Store laden">
+          <img class="badge-img"
+               data-de="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg"
+               data-en="App Store Badges/en/Download_on_the_Mac_App_Store_Badge_US-UK_RGB_wht_092917.svg"
+               src="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg"
+               alt="Laden im Mac App Store" height="36">
+        </a>
+      </div>
     </div>
   </nav>
 
@@ -36,10 +47,14 @@
             AskSafari liest die Seite mit und antwortet im Kontext.
           </p>
           <div class="hero-ctas">
-            <a href="#" class="appstore-badge" aria-label="Im App Store laden">
-              <img src="Download_on_the_App_Store_Badge_DE_RGB_wht_092917.svg" alt="Laden im App Store" height="54">
+            <a href="#" class="appstore-badge" aria-label="Im Mac App Store laden">
+              <img class="badge-img"
+                   data-de="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg"
+                   data-en="App Store Badges/en/Download_on_the_Mac_App_Store_Badge_US-UK_RGB_wht_092917.svg"
+                   src="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg"
+                   alt="Laden im Mac App Store" height="54">
             </a>
-            <a href="https://github.com" class="btn btn-ghost">Quellcode auf GitHub</a>
+            <a href="https://github.com/deltacore-labs/safari-ai-agent" class="btn btn-ghost">Quellcode auf GitHub</a>
           </div>
         </div>
         <div>
@@ -117,8 +132,12 @@
       <div class="cta-banner glass">
         <h2 class="display">Bereit loszulegen?</h2>
         <p class="subhead">Kostenlos installieren — keine Registrierung, kein Abo.</p>
-        <a href="#" class="appstore-badge" aria-label="Im App Store laden">
-          <img src="Download_on_the_App_Store_Badge_DE_RGB_blk_092917.svg" alt="Laden im App Store" height="54">
+        <a href="#" class="appstore-badge" aria-label="Im Mac App Store laden">
+          <img class="badge-img"
+               data-de="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_blk_092917.svg"
+               data-en="App Store Badges/en/Download_on_the_Mac_App_Store_Badge_US-UK_RGB_blk_092917.svg"
+               src="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_blk_092917.svg"
+               alt="Laden im Mac App Store" height="54">
         </a>
       </div>
     </div>
@@ -130,12 +149,30 @@
       <ul class="footer-links">
         <li><a href="impressum.html">Impressum</a></li>
         <li><a href="datenschutz.html">Datenschutz</a></li>
-        <li><a href="https://github.com">GitHub</a></li>
+        <li><a href="https://github.com/deltacore-labs/safari-ai-agent">GitHub</a></li>
       </ul>
       <span class="footer-copy">© 2026 Stefan Friedrich</span>
     </div>
   </footer>
 
 </div>
+  <script>
+    const toggle = document.getElementById('langToggle');
+    let lang = localStorage.getItem('badge-lang') || 'de';
+
+    function applyLang(l) {
+      lang = l;
+      localStorage.setItem('badge-lang', l);
+      document.querySelectorAll('.badge-img').forEach(img => {
+        img.src = img.dataset[l];
+      });
+      toggle.querySelectorAll('.lang-option').forEach(opt => {
+        opt.classList.toggle('lang-active', opt.dataset.lang === l);
+      });
+    }
+
+    toggle.addEventListener('click', () => applyLang(lang === 'de' ? 'en' : 'de'));
+    applyLang(lang);
+  </script>
 </body>
 </html>

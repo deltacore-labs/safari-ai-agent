@@ -352,6 +352,34 @@ a:focus-visible {
   .hero-ctas .btn { width: 100%; justify-content: center; }
 }
 
+/* ── NAV RIGHT ── */
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ── LANGUAGE TOGGLE ── */
+.lang-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+.lang-toggle:hover { border-color: rgba(255,255,255,0.2); }
+.lang-sep { color: var(--text-faint); }
+.lang-option { transition: color 0.15s; }
+.lang-option.lang-active { color: var(--accent); font-weight: 600; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .btn { transition: none; }
