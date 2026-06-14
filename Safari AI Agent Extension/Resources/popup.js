@@ -1,3 +1,13 @@
+import { t, setLanguage, getLanguage, applyTranslations as _applyTranslations } from "./i18n.js";
+
+function applyTranslations() {
+  _applyTranslations(document);
+  document.querySelectorAll("[data-i18n-alt]").forEach(el => {
+    el.alt = t(el.dataset.i18nAlt);
+  });
+  document.documentElement.lang = getLanguage();
+}
+
 // ── Provider Configuration ────────────────────────────────────
 const PROVIDERS = {
   openai: {
@@ -43,7 +53,8 @@ const DEFAULT_SETTINGS = {
   baseUrl: "http://localhost:6655/litellm/v1",
   model: "",
   customModel: "",
-  systemPrompt: ""
+  systemPrompt: "",
+  language: "de"
 };
 
 // ── Module State ──────────────────────────────────────────────
@@ -139,7 +150,7 @@ async function updateConversationIndex(id, firstUserMessage) {
 
   const title = firstUserMessage
     ? firstUserMessage.slice(0, 60) + (firstUserMessage.length > 60 ? "…" : "")
-    : "Neue Unterhaltung";
+    : t("new_conv_title");
 
   const existing = index.findIndex(c => c.id === id);
   const entry = existing >= 0
@@ -200,11 +211,13 @@ function formatRelativeDate(timestamp) {
   const now = Date.now();
   const diffMs = now - timestamp;
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Heute";
-  if (diffDays === 1) return "Gestern";
-  if (diffDays < 7) return `Vor ${diffDays} Tagen`;
-  if (diffDays < 30) return `Vor ${Math.floor(diffDays / 7)} Woche${Math.floor(diffDays / 7) > 1 ? "n" : ""}`;
-  return `Vor ${Math.floor(diffDays / 30)} Monat${Math.floor(diffDays / 30) > 1 ? "en" : ""}`;
+  if (diffDays === 0) return t("date_today");
+  if (diffDays === 1) return t("date_yesterday");
+  if (diffDays < 7) return t("date_days_ago", diffDays);
+  const weeks = Math.floor(diffDays / 7);
+  if (diffDays < 30) return t("date_weeks_ago", weeks, weeks > 1 ? t("date_week_plural") : "");
+  const months = Math.floor(diffDays / 30);
+  return t("date_months_ago", months, months > 1 ? t("date_month_plural") : "");
 }
 
 async function renderHistoryDropdown() {
@@ -224,7 +237,7 @@ async function renderHistoryDropdown() {
 
     const titleEl = document.createElement("div");
     titleEl.className = "history-item-title";
-    titleEl.textContent = conv.title || "Unterhaltung";
+    titleEl.textContent = conv.title || t("conv_title_fallback");
 
     const dateEl = document.createElement("div");
     dateEl.className = "history-item-date";
@@ -235,7 +248,7 @@ async function renderHistoryDropdown() {
 
     const pinBtn = document.createElement("button");
     pinBtn.className = "history-pin-btn" + (conv.pinned ? " pinned" : "");
-    pinBtn.title = conv.pinned ? "Lösen" : "Anpinnen";
+    pinBtn.title = conv.pinned ? t("pin_btn_unpin") : t("pin_btn_pin");
     pinBtn.innerHTML = conv.pinned
       ? `<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 1L15 6.5l-3.5 1-3 3v3l-2-2-3 3-1-1 3-3-2-2h3l1-3.5z"/></svg>`
       : `<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" xmlns="http://www.w3.org/2000/svg"><path d="M9.5 1L15 6.5l-3.5 1-3 3v3l-2-2-3 3-1-1 3-3-2-2h3l1-3.5z"/></svg>`;
@@ -288,6 +301,7 @@ function closeHistoryDropdown() {
 async function switchToConversation(id) {
   if (isStreaming) return;
   closeHistoryDropdown();
+  clearPendingImage();
   await setActiveConvId(id);
   chatHistory = await loadConversation(id);
   lastDisplayedModel = null;
@@ -306,6 +320,19 @@ async function switchToConversation(id) {
 }
 
 // ── Settings UI ───────────────────────────────────────────────
+// Stale-while-revalidate model-list cache. Keyed by (provider, baseUrl,
+// hasApiKey) — never store the key itself. 5min TTL, plus a monotonic
+// call counter so a slow in-flight fetch can't overwrite a newer result.
+const MODELS_CACHE_TTL_MS = 5 * 60 * 1000;
+const modelsCache = new Map(); // cacheKey → { models, ts } OR { result, ts } for non-array
+let currentModelCallId = 0;
+
+function modelsCacheKey(providerId) {
+  const baseUrl = document.getElementById("base-url-input")?.value.trim() ?? "";
+  const hasKey = !!document.getElementById("api-key-input")?.value.trim();
+  return `${providerId}|${baseUrl}|${hasKey ? 1 : 0}`;
+}
+
 async function populateModelDropdown(providerId) {
   const modelSelect = document.getElementById("model-select");
   const modelCustomInput = document.getElementById("model-custom-input");
@@ -344,13 +371,35 @@ async function populateModelDropdown(providerId) {
     modelCustomInput.style.display = "none";
   }
 
-  // Show loading state
   modelSelect.style.display = "block";
+
+  // Stale-while-revalidate: if we have a fresh cache hit, use it instantly
+  // and skip the spinner/disabled flicker.
+  const key = modelsCacheKey(providerId);
+  const cached = modelsCache.get(key);
+  const isFresh = cached && (Date.now() - cached.ts) < MODELS_CACHE_TTL_MS;
+
+  if (isFresh && Array.isArray(cached.models)) {
+    modelSelect.disabled = false;
+    modelSelect.innerHTML = cached.models
+      .map(m => `<option value="${m}">${m}</option>`)
+      .join("");
+    if ([...modelSelect.options].some(o => o.value === settings.model)) {
+      modelSelect.value = settings.model;
+    }
+    return;
+  }
+
+  // No fresh cache → show loading state
   modelSelect.disabled = true;
-  modelSelect.innerHTML = `<option value="">Modelle werden geladen…</option>`;
+  modelSelect.innerHTML = `<option value="">${t("model_loading")}</option>`;
   spinner.style.display = "inline-block";
 
+  const myCallId = ++currentModelCallId;
   const result = await fetchModelsForProvider(providerId);
+
+  // If a newer call has been issued meanwhile, drop this stale result.
+  if (myCallId !== currentModelCallId) return;
 
   spinner.style.display = "none";
   modelSelect.disabled = false;
@@ -358,6 +407,7 @@ async function populateModelDropdown(providerId) {
   if (result === null) return;
 
   if (Array.isArray(result)) {
+    modelsCache.set(key, { models: result, ts: Date.now() });
     modelSelect.innerHTML = result
       .map(m => `<option value="${m}">${m}</option>`)
       .join("");
@@ -388,7 +438,9 @@ function updateBaseUrlVisibility(providerId) {
 
 function updatePageCtrlUI() {
   document.querySelectorAll(".page-ctx-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.mode === pageContextMode);
+    const isActive = btn.dataset.mode === pageContextMode;
+    btn.classList.toggle("active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
   });
 }
 
@@ -398,6 +450,8 @@ function loadSettingsIntoUI() {
   const defaultBaseUrl = PROVIDERS[settings.provider]?.baseUrl ?? "";
   document.getElementById("base-url-input").value = settings.provider === "hyperspace" ? defaultBaseUrl : (settings.baseUrl || defaultBaseUrl);
   document.getElementById("system-prompt-input").value = settings.systemPrompt;
+  const langSelect = document.getElementById("language-select");
+  if (langSelect) langSelect.value = settings.language || "de";
   updateBaseUrlVisibility(settings.provider);
   populateModelDropdown(settings.provider);
 
@@ -433,7 +487,8 @@ async function saveSettingsFromUI() {
     baseUrl: document.getElementById("base-url-input").value.trim(),
     model: isCustom ? "" : document.getElementById("model-select").value,
     customModel: isCustom ? document.getElementById("model-custom-input").value.trim() : "",
-    systemPrompt: document.getElementById("system-prompt-input").value
+    systemPrompt: document.getElementById("system-prompt-input").value,
+    language: document.getElementById("language-select")?.value || "de"
     // _autoDetected wird bewusst nicht gespeichert
   };
 
@@ -441,10 +496,13 @@ async function saveSettingsFromUI() {
   await saveSettings(newSettings); // nur newSettings ohne _autoDetected
   lastDisplayedModel = null;
   applyTheme(settings.provider, settings.model);
+  setLanguage(settings.language || "de");
+  applyTranslations();
+  browser.runtime.sendMessage({ type: "LANGUAGE_CHANGED", language: settings.language }).catch(() => {});
 
   const btn = document.getElementById("save-settings-btn");
   const original = btn.textContent;
-  btn.textContent = "Gespeichert ✓";
+  btn.textContent = t("saved_confirm");
   setTimeout(() => { btn.textContent = original; }, 1500);
 }
 
@@ -511,11 +569,11 @@ function loadImageFile(file) {
   if (!file) return;
   const ALLOWED = ["image/png", "image/jpeg", "image/gif", "image/webp"];
   if (!ALLOWED.includes(file.type)) {
-    alert("Nur PNG, JPEG, GIF und WebP werden unterstützt.");
+    alert(t("image_type_error"));
     return;
   }
   if (file.size > 5 * 1024 * 1024) {
-    alert("Bild zu groß (max. 5 MB).");
+    alert(t("image_size_error"));
     return;
   }
   const reader = new FileReader();
@@ -585,39 +643,39 @@ async function fetchModelsForProvider(providerId) {
   if (providerId === "gemini") return null;
 
   if (providerId === "openai") {
-    if (!apiKey) return { hint: "API-Key eingeben um Modelle zu laden" };
+    if (!apiKey) return { hint: t("api_hint_enter_key") };
     const res = await fetch("https://api.openai.com/v1/models", {
       headers: { "Authorization": `Bearer ${apiKey}` }
     });
-    if (res.status === 401) return { error: "API-Key ungültig" };
-    if (!res.ok) return { error: `Fehler ${res.status}` };
+    if (res.status === 401) return { error: t("api_err_key_invalid") };
+    if (!res.ok) return { error: t("api_err_status", res.status) };
     const json = await res.json();
     const models = (json.data ?? [])
       .map(m => m.id)
       .filter(id => id.includes("gpt"))
       .sort();
-    return models.length ? models : { error: "Keine Modelle gefunden" };
+    return models.length ? models : { error: t("api_err_no_models") };
   }
 
   // local or hyperspace — OpenAI-compatible /models endpoint
-  if (!baseUrl) return { hint: "Base URL eingeben um Modelle zu laden" };
+  if (!baseUrl) return { hint: t("api_hint_enter_url") };
   const url = baseUrl.replace(/\/$/, "") + "/models";
   try {
     const headers = { "Content-Type": "application/json" };
     if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
     const res = await fetch(url, { headers });
-    if (res.status === 401) return { error: "API-Key ungültig" };
-    if (res.status === 404) return { error: "Base URL nicht gefunden" };
-    if (!res.ok) return { error: `Fehler ${res.status}` };
+    if (res.status === 401) return { error: t("api_err_key_invalid") };
+    if (res.status === 404) return { error: t("api_hint_not_found") };
+    if (!res.ok) return { error: t("api_err_status", res.status) };
     const json = await res.json();
     const EMBEDDING_KEYWORDS = ["embedding", "embed", "search", "similarity"];
     const models = (json.data ?? [])
       .map(m => m.id)
       .filter(id => id && !EMBEDDING_KEYWORDS.some(k => id.toLowerCase().includes(k)))
       .sort();
-    return models.length ? models : { error: "Keine Modelle gefunden" };
+    return models.length ? models : { error: t("api_err_no_models") };
   } catch {
-    return { error: "Modelle konnten nicht geladen werden" };
+    return { error: t("api_err_load_fail") };
   }
 }
 
@@ -638,14 +696,25 @@ function markdownToHtml(text) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Code blocks (must come before inline code) — preserve language as class
+  // Stash code blocks and inline code FIRST with NUL-delimited sentinels so
+  // none of the inline passes (bold/italic/lists/etc.) see their contents.
+  // Without this, e.g. ```\n- a\n- b\n``` gets the list-regex applied to the
+  // <pre><code>…</code></pre> body and breaks rendering.
+  const codeBlocks = [];
+  const inlineCodes = [];
+
   escaped = escaped.replace(/```([\w-]*)\n?([\s\S]*?)```/g, (_, lang, code) => {
     const langClass = lang ? ` class="language-${lang}"` : "";
-    return `<pre><code${langClass}>${code.trim()}</code></pre>`;
+    const idx = codeBlocks.length;
+    codeBlocks.push(`<pre><code${langClass}>${code.trim()}</code></pre>`);
+    return `\x00CB${idx}\x00`;
   });
 
-  // Inline code
-  escaped = escaped.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  escaped = escaped.replace(/`([^`\n]+)`/g, (_, code) => {
+    const idx = inlineCodes.length;
+    inlineCodes.push(`<code>${code}</code>`);
+    return `\x00IC${idx}\x00`;
+  });
 
   // Bold
   escaped = escaped.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
@@ -688,6 +757,7 @@ function markdownToHtml(text) {
     return `\n<table><thead><tr>${headerCells}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
   });
 
+  // Unordered lists
   escaped = escaped.replace(/(?:^|\n)((?:- .+(?:\n|$))+)/g, (_, block) => {
     const items = block
       .split("\n")
@@ -697,16 +767,45 @@ function markdownToHtml(text) {
     return `\n<ul>${items}</ul>`;
   });
 
+  // Ordered lists — `1. foo` / `2. bar`
+  escaped = escaped.replace(/(?:^|\n)((?:\d+\.\s.+(?:\n|$))+)/g, (_, block) => {
+    const items = block
+      .split("\n")
+      .filter(l => /^\d+\.\s.+/.test(l))
+      .map(l => `<li>${l.replace(/^\d+\.\s/, "")}</li>`)
+      .join("");
+    return `\n<ol>${items}</ol>`;
+  });
+
+  // Blockquotes — `> foo`, multiple consecutive lines merged
+  escaped = escaped.replace(/(?:^|\n)((?:&gt; ?.*(?:\n|$))+)/g, (_, block) => {
+    const inner = block
+      .split("\n")
+      .map(l => l.replace(/^&gt; ?/, ""))
+      .filter(l => l.length)
+      .join("<br>");
+    return `\n<blockquote>${inner}</blockquote>`;
+  });
+
   // Paragraphs
   escaped = escaped
     .split(/\n{2,}/)
     .map(chunk => {
       const trimmed = chunk.trim();
       if (!trimmed) return "";
-      if (trimmed.startsWith("<pre") || trimmed.startsWith("<ul") || trimmed.startsWith("<table") || trimmed.startsWith("<hr") || /^<h[1-6][\s>]/.test(trimmed)) return trimmed;
+      if (trimmed.startsWith("<pre")
+          || trimmed.startsWith("<ul") || trimmed.startsWith("<ol")
+          || trimmed.startsWith("<table") || trimmed.startsWith("<hr")
+          || trimmed.startsWith("<blockquote")
+          || /^<h[1-6][\s>]/.test(trimmed)
+          || /^\x00CB\d+\x00$/.test(trimmed)) return trimmed;
       return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
     })
     .join("");
+
+  // Restore stashed code last so nothing has touched their bodies.
+  escaped = escaped.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[Number(i)] ?? "");
+  escaped = escaped.replace(/\x00IC(\d+)\x00/g, (_, i) => inlineCodes[Number(i)] ?? "");
 
   return escaped;
 }
@@ -809,7 +908,7 @@ function renderModelTag(modelName) {
   removeEmptyState();
   const tag = document.createElement("div");
   tag.className = "model-tag";
-  tag.textContent = modelName || "Kein Modell ausgewählt";
+  tag.textContent = modelName || t("no_model_selected");
   document.getElementById("messages").appendChild(tag);
   scrollToBottom();
 }
@@ -852,7 +951,7 @@ function renderMessage(role, content) {
   if (role === "ai") {
     const copyBtn = document.createElement("button");
     copyBtn.className = "copy-btn";
-    copyBtn.title = "Kopieren";
+    copyBtn.title = t("copy_btn_title");
     copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`;
     copyBtn.addEventListener("click", () => {
       navigator.clipboard.writeText(bubble._rawText ?? bubble.textContent).then(() => {
@@ -878,7 +977,7 @@ function renderEmptyState() {
       <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M16 3C8.82 3 3 8.82 3 16c0 2.28.58 4.42 1.6 6.28L3 29l6.72-1.6A13 13 0 1016 3z" stroke="#d3cec6" stroke-width="1.5" stroke-linejoin="round"/>
       </svg>
-      <p>Stelle mir eine Frage zu dieser Seite oder irgendeinem anderen Thema.</p>
+      <p>${t("empty_state_text")}</p>
     </div>`;
 }
 
@@ -931,18 +1030,27 @@ async function fetchPageContent() {
   }
 }
 
+// ── Show-Page Detection ───────────────────────────────────────
+// Matches phrases like "zeige mir", "öffne die Seite", "geh zu", etc.
+const SHOW_PAGE_KEYWORDS_RE = /(?:^|[\s.,!?;:()"'])(?:zeig(?:e)?\s+mir|zeig(?:e)?|öffne|geh\s+(?:zu|auf)|navigiere\s+(?:zu|auf)|besuche|open|show\s+me|go\s+to|visit)(?:[\s.,!?;:()"']|$)/i;
+
 // ── Subpage Auto-Fetch ────────────────────────────────────────
 const SUBPAGE_KEYWORDS_RE = /(?:^|[\s.,!?;:()"'])(?:hole|hol|öffne|zeig|lies|lese|fetch|artikel|article|unterseite|subpage|inhalt|mehr\s+dazu|vollständig|was\s+steht\s+(?:im|in\s+dem|dort|da))(?:[\s.,!?;:()"']|$)/i;
 
 async function classifySubpageNeed(text) {
   const providerId = settings.provider;
-  const model = (providerId === "local" || providerId === "hyperspace") ? settings.customModel : settings.model;
+  // customModel is only persisted for the "local" provider — hyperspace uses
+  // settings.model populated from /v1/models. Reading customModel for it
+  // always yields "" and the !model guard below would silently disable the
+  // classifier.
+  const model = providerId === "local" ? settings.customModel : settings.model;
   if (!model) return false;
-  if (!settings.apiKey && providerId !== "local") return false;
+  // local and hyperspace do not require an API key (LiteLLM/Ollama).
+  if (!settings.apiKey && providerId !== "local" && providerId !== "hyperspace") return false;
   if ((providerId === "local" || providerId === "hyperspace") && !settings.baseUrl) return false;
 
-  const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
-  const userMsg = `Bezieht sich diese Frage auf den Detailinhalt eines verlinkten Artikels oder einer Unterseite? Frage: ${text}`;
+  const systemMsg = t("sys_classify_yn");
+  const userMsg = t("sys_classify_subpage", text);
 
   const timeout = new Promise(resolve => setTimeout(() => resolve(false), 3000));
 
@@ -966,7 +1074,7 @@ async function classifySubpageNeed(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.content?.[0]?.text ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     } else if (providerId === "gemini") {
       const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
@@ -980,18 +1088,19 @@ async function classifySubpageNeed(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     } else {
       const url = (providerId === "local" || providerId === "hyperspace")
         ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
         : PROVIDERS.openai.baseUrl;
+      const headers = { "Content-Type": "application/json" };
+      // Only attach Authorization when a key is set — `Bearer ` with empty
+      // token is rejected by some LiteLLM/nginx proxies.
+      if (settings.apiKey) headers["Authorization"] = `Bearer ${settings.apiKey}`;
       classifyPromise = fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${settings.apiKey}`
-        },
+        headers,
         body: JSON.stringify({
           model,
           max_tokens: 5,
@@ -1002,7 +1111,7 @@ async function classifySubpageNeed(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     }
 
@@ -1025,22 +1134,31 @@ function extractUrlFromText(text) {
 }
 
 // ── Background Tab Fetch ──────────────────────────────────────
-async function fetchUrlContent(url) {
+async function fetchUrlContent(url, { active = false, keepOpen = false } = {}) {
   let tabId = null;
   try {
-    const tab = await browser.tabs.create({ url, active: false });
+    const tab = await browser.tabs.create({ url, active });
     tabId = tab.id;
 
     await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("timeout")), 10000);
+      let timer;
+      const cleanup = () => {
+        clearTimeout(timer);
+        browser.tabs.onUpdated.removeListener(onUpdated);
+      };
       function onUpdated(id, info) {
         if (id !== tabId) return;
         if (info.status === "complete") {
-          clearTimeout(timer);
-          browser.tabs.onUpdated.removeListener(onUpdated);
+          cleanup();
           resolve();
         }
       }
+      timer = setTimeout(() => {
+        // Always remove the listener on timeout — otherwise it accumulates
+        // for the popup's lifetime and fires on every browser-wide tab update.
+        cleanup();
+        reject(new Error("timeout"));
+      }, 10000);
       browser.tabs.onUpdated.addListener(onUpdated);
     });
 
@@ -1074,7 +1192,7 @@ async function fetchUrlContent(url) {
   } catch {
     return null;
   } finally {
-    if (tabId !== null) {
+    if (tabId !== null && !keepOpen) {
       try { await browser.tabs.remove(tabId); } catch { /* ignore */ }
     }
   }
@@ -1088,9 +1206,9 @@ async function selectRelevantLinks(rootContent, links, question) {
   const model = providerId === "local" ? settings.customModel : settings.model;
   if (!model) return [];
 
-  const systemMsg = "Antworte ausschließlich mit einem JSON-Array von URLs, ohne Erklärung. Beispiel: [\"https://example.com/news\"]";
+  const systemMsg = t("sys_classify_links");
   const linkList = links.slice(0, 50).join("\n");
-  const userMsg = `Seite: ${rootContent.title}\nURL: ${rootContent.url}\n\nSeiteninhalt (Auszug):\n${rootContent.text.slice(0, 3000)}\n\nVerfügbare Links auf der Seite:\n${linkList}\n\nNutzerfrage: ${question}\n\nWelche dieser Links (maximal 5) sind am relevantesten um die Frage zu beantworten?`;
+  const userMsg = t("sys_links_user", rootContent.title, rootContent.url, rootContent.text.slice(0, 3000), linkList, question);
 
   const timeout = new Promise(resolve => setTimeout(() => resolve([]), 5000));
 
@@ -1173,11 +1291,12 @@ async function classifyWithAI(text) {
   const providerId = settings.provider;
   const model = providerId === "local" ? settings.customModel : settings.model;
   if (!model) return false;
-  if (!settings.apiKey && providerId !== "local") return false;
+  // local and hyperspace do not require an API key (LiteLLM/Ollama).
+  if (!settings.apiKey && providerId !== "local" && providerId !== "hyperspace") return false;
   if ((providerId === "local" || providerId === "hyperspace") && !settings.baseUrl) return false;
 
-  const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
-  const userMsg = `Bezieht sich diese Frage auf den Inhalt einer bestimmten Webseite, die der Nutzer gerade geöffnet hat? Frage: ${text}`;
+  const systemMsg = t("sys_classify_yn");
+  const userMsg = t("sys_classify_page", text);
 
   const timeout = new Promise(resolve => setTimeout(() => resolve(false), 3000));
 
@@ -1201,7 +1320,7 @@ async function classifyWithAI(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.content?.[0]?.text ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     } else if (providerId === "gemini") {
       const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
@@ -1215,19 +1334,18 @@ async function classifyWithAI(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     } else {
       // OpenAI-compatible (openai, local, hyperspace)
       const url = (providerId === "local" || providerId === "hyperspace")
         ? settings.baseUrl.replace(/\/$/, "") + "/chat/completions"
         : PROVIDERS.openai.baseUrl;
+      const headers = { "Content-Type": "application/json" };
+      if (settings.apiKey) headers["Authorization"] = `Bearer ${settings.apiKey}`;
       classifyPromise = fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${settings.apiKey}`
-        },
+        headers,
         body: JSON.stringify({
           model,
           max_tokens: 5,
@@ -1238,7 +1356,7 @@ async function classifyWithAI(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     }
 
@@ -1264,8 +1382,8 @@ async function uncertaintyCheck(text) {
   if (!model) return false;
   if (!settings.apiKey && providerId !== "local" && providerId !== "hyperspace") return false;
 
-  const systemMsg = "Antworte ausschließlich mit 'ja' oder 'nein', ohne Erklärung.";
-  const userMsg = `Signalisiert der folgende Text, dass das KI-Modell keine aktuellen oder zuverlässigen Informationen zu dem Thema hat (z.B. wegen Trainingsdaten-Cutoff, fehlendem Internetzugang, oder Wissenslücken zu aktuellen Ereignissen)? Text: ${text}`;
+  const systemMsg = t("sys_classify_yn");
+  const userMsg = t("sys_classify_uncertainty", text);
 
   const timeout = new Promise(resolve => setTimeout(() => resolve(false), 4000));
 
@@ -1289,7 +1407,7 @@ async function uncertaintyCheck(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.content?.[0]?.text ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     } else if (providerId === "gemini") {
       const url = PROVIDERS.gemini.baseUrl.replace("{model}", model) + `?key=${settings.apiKey}`;
@@ -1303,7 +1421,7 @@ async function uncertaintyCheck(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     } else {
       // OpenAI-compatible (openai, local, hyperspace)
@@ -1325,7 +1443,7 @@ async function uncertaintyCheck(text) {
         })
       }).then(r => r.json()).then(json => {
         const answer = (json.choices?.[0]?.message?.content ?? "").toLowerCase();
-        return answer.includes("ja") || answer.includes("yes");
+        return answer.includes(t("sys_classify_yn_answer")) || answer.includes("yes") || answer.includes("ja");
       });
     }
 
@@ -1363,17 +1481,15 @@ async function fetchWebContext(question) {
 
 // ── System Prompt Builder ─────────────────────────────────────
 function buildSystemPrompt(includePageContext = false, webContext = null) {
-  const base = settings.systemPrompt?.trim() ||
-    "Du bist ein hilfreicher KI-Assistent.";
-
-  const quickRepliesInstruction = "Wenn du dem Nutzer mehrere Optionen anbieten möchtest, kannst du am Ende deiner Antwort bis zu 4 klickbare Vorschläge mit folgendem Format hinzufügen: [QUICK_REPLIES: Option A | Option B | Option C]";
-
+  const base = settings.systemPrompt?.trim() || t("sys_default_prompt");
+  const quickRepliesInstruction = t("sys_quick_replies");
   const now = new Date();
-  const dateStr = now.toLocaleDateString("de-DE", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  let prompt = `${base}\n\n${quickRepliesInstruction}\n\nAktuelles Datum: ${dateStr}.`;
+  const locale = getLanguage() === "en" ? "en-US" : "de-DE";
+  const dateStr = now.toLocaleDateString(locale, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  let prompt = `${base}\n\n${quickRepliesInstruction}\n\n${t("sys_date_prefix", dateStr)}`;
 
   if (webContext) {
-    prompt += `\n\nAktuelle Informationen aus dem Internet (via Websuche):\n<webcontext>\n${webContext}\n</webcontext>\nNutze diese Informationen bevorzugt gegenüber deinem Trainingswissen.`;
+    prompt += `\n\n${t("sys_web_context", webContext)}`;
   }
 
   if (!includePageContext || !currentPageContext || currentPageContext._debugError) return prompt;
@@ -1381,9 +1497,7 @@ function buildSystemPrompt(includePageContext = false, webContext = null) {
   return [
     prompt,
     "",
-    `Der Nutzer befindet sich auf: ${currentPageContext.title}`,
-    `URL: ${currentPageContext.url}`,
-    `Seiteninhalt:\n${currentPageContext.text}`
+    t("sys_page_context", currentPageContext.title, currentPageContext.url, currentPageContext.text)
   ].join("\n");
 }
 
@@ -1404,6 +1518,21 @@ async function* parseSSE(response) {
       if (line.startsWith("data: ")) yield line.slice(6).trim();
     }
   }
+}
+
+// ── API Error Helper ──────────────────────────────────────────
+function friendlyApiError(provider, status, body) {
+  if (status === 401) return t("api_err_401");
+  if (status === 403) return t("api_err_403", provider);
+  if (status === 429) return t("api_err_429");
+  if (status === 500 || status === 503) return t("api_err_5xx", provider);
+  if (status === 0 || !status) return t("api_err_no_conn");
+  try {
+    const json = JSON.parse(body);
+    const msg = json?.error?.message ?? json?.message;
+    if (msg) return msg;
+  } catch { /* fall through */ }
+  return t("api_err_generic", provider, status);
 }
 
 // ── OpenAI / Local / Hyperspace Streaming ────────────────────
@@ -1431,7 +1560,7 @@ async function* streamOpenAI(messages, signal, imageData = null) {
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`OpenAI API ${response.status}: ${err}`);
+    throw new Error(friendlyApiError("OpenAI", response.status, err));
   }
 
   for await (const data of parseSSE(response)) {
@@ -1537,7 +1666,7 @@ async function* streamAnthropic(messages, includeCtx = false, webContext = null,
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Anthropic API ${response.status}: ${err}`);
+    throw new Error(friendlyApiError("Anthropic", response.status, err));
   }
 
   for await (const data of parseSSE(response)) {
@@ -1580,7 +1709,7 @@ async function callGemini(messages, includeCtx = false, webContext = null, signa
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Gemini API ${response.status}: ${err}`);
+    throw new Error(friendlyApiError("Gemini", response.status, err));
   }
 
   const json = await response.json();
@@ -1588,23 +1717,27 @@ async function callGemini(messages, includeCtx = false, webContext = null, signa
 }
 
 // ── Streaming Flush Helper ────────────────────────────────────
+// Throttle is intentionally ~120ms (not 50ms) — at 30 tok/s the human eye
+// doesn't perceive 8 vs 20 renders/s, and reparsing markdown on every tick
+// is O(N²) over the accumulated text. nearBottom is captured BEFORE the
+// innerHTML write so the layout-thrash check uses the pre-write geometry.
 function makeStreamFlusher(getBubble, getResponse) {
   let timer = null;
   function flush() {
     timer = null;
     const bubble = getBubble();
     if (!bubble) return;
+    const list = document.getElementById("messages");
+    const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
     requestAnimationFrame(() => {
       const text = getResponse();
       bubble.innerHTML = markdownToHtml(text);
       bubble._rawText = text;
-      const list = document.getElementById("messages");
-      const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
       if (nearBottom) list.scrollTop = list.scrollHeight;
     });
   }
   function schedule() {
-    if (!timer) timer = setTimeout(flush, 50);
+    if (!timer) timer = setTimeout(flush, 120);
   }
   function finalize() {
     if (timer) { clearTimeout(timer); timer = null; }
@@ -1636,12 +1769,12 @@ function highlightCode(bubble) {
       if (!code) return;
       const btn = document.createElement("button");
       btn.className = "code-copy-btn";
-      btn.textContent = "Kopieren";
+      btn.textContent = t("code_copy_btn");
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
         navigator.clipboard.writeText(code.textContent).then(() => {
           btn.textContent = "✓";
-          setTimeout(() => { btn.textContent = "Kopieren"; }, 1500);
+          setTimeout(() => { btn.textContent = t("code_copy_btn"); }, 1500);
         });
       });
       pre.appendChild(btn);
@@ -1652,7 +1785,7 @@ function highlightCode(bubble) {
 // ── Web-Search Fallback ───────────────────────────────────────
 // Runs after sendMessage()'s finally block so the send button is re-enabled
 // immediately after the main AI response. Fire-and-forget from sendMessage.
-async function runWebSearchFallback({ providerId, history, text, includeCtx, fullResponse }) {
+async function runWebSearchFallback({ providerId, history, text, includeCtx, fullResponse, convIdAtSend }) {
   // Only supported on hyperspace / local
   if (providerId !== "hyperspace" && providerId !== "local") return;
   if (!fullResponse) return;
@@ -1660,16 +1793,26 @@ async function runWebSearchFallback({ providerId, history, text, includeCtx, ful
   const isUncertain = await uncertaintyCheck(fullResponse);
   if (!isUncertain) return;
 
+  // If the user switched conversations meanwhile, persist into the snapshot
+  // conversation without mutating the active UI. We re-load that conv's
+  // history fresh from storage, append, and save — never overwriting the
+  // newly-active conversation's storage.
+  const isStillActive = convIdAtSend === activeConvId;
+
   const typingEl = document.getElementById("typing-indicator");
-  renderContextModeNotice("Websuche wird durchgeführt…");
-  typingEl.classList.remove("hidden");
-  typingEl.removeAttribute("aria-hidden");
-  scrollToBottom();
+  if (isStillActive) {
+    renderContextModeNotice(t("ctx_web_search"));
+    typingEl.classList.remove("hidden");
+    typingEl.removeAttribute("aria-hidden");
+    scrollToBottom();
+  }
 
   const webContext = await fetchWebContext(text);
 
-  typingEl.classList.add("hidden");
-  typingEl.setAttribute("aria-hidden", "true");
+  if (isStillActive) {
+    typingEl.classList.add("hidden");
+    typingEl.setAttribute("aria-hidden", "true");
+  }
 
   if (!webContext) return;
 
@@ -1689,9 +1832,11 @@ async function runWebSearchFallback({ providerId, history, text, includeCtx, ful
 
   if (providerId === "gemini") {
     webResponse = await callGemini(webMessages, includeCtx, webContext);
-    webBubble = renderMessage("ai", webResponse);
-    renderKatex(webBubble);
-    highlightCode(webBubble);
+    if (isStillActive) {
+      webBubble = renderMessage("ai", webResponse);
+      renderKatex(webBubble);
+      highlightCode(webBubble);
+    }
   } else {
     const webGenerator = providerId === "anthropic"
       ? streamAnthropic(webMessages, includeCtx, webContext)
@@ -1701,22 +1846,33 @@ async function runWebSearchFallback({ providerId, history, text, includeCtx, ful
     const webFlusher = makeStreamFlusher(() => webBubble, () => webResponse);
     for await (const token of webGenerator) {
       if (firstWebToken) {
-        webBubble = renderMessage("ai", "");
+        if (convIdAtSend === activeConvId) webBubble = renderMessage("ai", "");
         firstWebToken = false;
       }
       webResponse += token;
-      webFlusher.schedule();
+      if (webBubble) webFlusher.schedule();
     }
-    webFlusher.finalize();
-    requestAnimationFrame(() => renderKatex(webBubble));
-    requestAnimationFrame(() => highlightCode(webBubble));
+    if (webBubble) {
+      webFlusher.finalize();
+      requestAnimationFrame(() => renderKatex(webBubble));
+      requestAnimationFrame(() => highlightCode(webBubble));
+    }
   }
 
-  if (webResponse) {
+  if (!webResponse) return;
+
+  if (convIdAtSend === activeConvId) {
     chatHistory.push({ role: "assistant", content: webResponse });
     await saveConversation(activeConvId, chatHistory);
     const firstUser = chatHistory.find(m => m.role === "user");
     await updateConversationIndex(activeConvId, firstUser?.content ?? "");
+  } else {
+    // User switched conversations — persist into snapshot conv without touching UI
+    const stored = await loadConversation(convIdAtSend);
+    stored.push({ role: "assistant", content: webResponse });
+    await saveConversation(convIdAtSend, stored);
+    const firstUser = stored.find(m => m.role === "user");
+    await updateConversationIndex(convIdAtSend, firstUser?.content ?? "");
   }
 }
 
@@ -1726,14 +1882,20 @@ function enterStopMode() {
   btn.classList.add("stop-mode");
   btn.disabled = false;
   btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="white" xmlns="http://www.w3.org/2000/svg"><rect x="1" y="1" width="10" height="10" rx="2"/></svg>`;
-  btn.setAttribute("aria-label", "Abbrechen");
+  btn.setAttribute("aria-label", t("stop_aria"));
+  // Mute the messages region during streaming so VoiceOver doesn't read
+  // every flushed token. Re-announces cleanly on exitStopMode.
+  const messages = document.getElementById("messages");
+  if (messages) messages.setAttribute("aria-busy", "true");
 }
 
 function exitStopMode() {
   const btn = document.getElementById("send-btn");
   btn.classList.remove("stop-mode");
-  btn.setAttribute("aria-label", "Senden");
+  btn.setAttribute("aria-label", t("send_aria"));
   btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2 8h12M9 3l5 5-5 5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const messages = document.getElementById("messages");
+  if (messages) messages.removeAttribute("aria-busy");
 }
 
 // ── Send Message ──────────────────────────────────────────────
@@ -1744,76 +1906,76 @@ async function sendMessage() {
   const text = input.value.trim();
   if (!text) return;
 
-  isStreaming = true;
-  abortController = new AbortController();
-  enterStopMode();
-  input.value = "";
-  input.style.height = "auto";
-  const imageDataSnapshot = pendingImageData;
-  clearPendingImage();
-
-  // Show model tag if model changed since last message
-  const currentModel = settings.model || settings.customModel || "?";
-  if (currentModel !== lastDisplayedModel) {
-    const providerName = PROVIDERS[settings.provider]?.name ?? settings.provider;
-    // Strip vendor prefixes like "anthropic--" or "openai/" for readability
-    const displayModel = currentModel.replace(/^[a-z]+--/i, "").replace(/^[a-z]+\//i, "");
-    renderModelTag(`${providerName} · ${displayModel}`);
-    lastDisplayedModel = currentModel;
-  }
-
-  // Guard: no API key (hyperspace and local don't need one)
+  // Guard: no API key (hyperspace and local don't need one).
+  // Check BEFORE clearing pending image / consuming input — so the user can
+  // open settings, fix the key, and re-send the same message + image.
   if (!settings.apiKey && settings.provider !== "local" && settings.provider !== "hyperspace") {
-    isStreaming = false;
-    abortController = null;
-    exitStopMode();
-    document.getElementById("send-btn").disabled = input.value.trim().length === 0;
-    renderMessage("ai", "Bitte zuerst einen API-Key in den Einstellungen hinterlegen.");
+    renderMessage("ai", t("no_api_key_msg"));
     return;
   }
 
-  chatHistory.push({ role: "user", content: text });
-  renderMessage("user", text);
-
-  const typingEl = document.getElementById("typing-indicator");
-  const typingAvatar = typingEl.querySelector(".ai-avatar");
-  const { bg, img } = getProviderAvatar();
-  if (typingAvatar) {
-    typingAvatar.style.background = bg;
-    typingAvatar.innerHTML = "";
-    if (img) {
-      const imgEl = document.createElement("img");
-      imgEl.src = img;
-      imgEl.width = 16; imgEl.height = 16;
-      imgEl.style.cssText = "object-fit:contain;border-radius:2px";
-      typingAvatar.appendChild(imgEl);
-    }
-  }
-  typingEl.classList.remove("hidden");
-  typingEl.removeAttribute("aria-hidden");
-  scrollToBottom();
-
-  const providerId = settings.provider;
+  isStreaming = true;
+  abortController = new AbortController();
+  enterStopMode();
 
   let aiBubble = null;
   let fullResponse = "";
   let flusher = null;
   let snapshotForWebSearch = null;
+  const typingEl = document.getElementById("typing-indicator");
 
   try {
+    input.value = "";
+    input.style.height = "auto";
+    const imageDataSnapshot = pendingImageData;
+    clearPendingImage();
+
+    // Show model tag if model changed since last message
+    const currentModel = settings.model || settings.customModel || "?";
+    if (currentModel !== lastDisplayedModel) {
+      const providerName = PROVIDERS[settings.provider]?.name ?? settings.provider;
+      // Strip vendor prefixes like "anthropic--" or "openai/" for readability
+      const displayModel = currentModel.replace(/^[a-z]+--/i, "").replace(/^[a-z]+\//i, "");
+      renderModelTag(`${providerName} · ${displayModel}`);
+      lastDisplayedModel = currentModel;
+    }
+
+    chatHistory.push({ role: "user", content: text });
+    renderMessage("user", text);
+
+    const typingAvatar = typingEl.querySelector(".ai-avatar");
+    const { bg, img } = getProviderAvatar();
+    if (typingAvatar) {
+      typingAvatar.style.background = bg;
+      typingAvatar.innerHTML = "";
+      if (img) {
+        const imgEl = document.createElement("img");
+        imgEl.src = img;
+        imgEl.width = 16; imgEl.height = 16;
+        imgEl.style.cssText = "object-fit:contain;border-radius:2px";
+        typingAvatar.appendChild(imgEl);
+      }
+    }
+    typingEl.classList.remove("hidden");
+    typingEl.removeAttribute("aria-hidden");
+    scrollToBottom();
+
+    const providerId = settings.provider;
+
     // ── URL Fetch Agent ───────────────────────────────────────
     const detectedUrl = pageContextMode !== "off" ? extractUrlFromText(text) : null;
     if (detectedUrl) {
-      renderContextModeNotice("🔗 Seite wird geladen…");
+      const showPage = SHOW_PAGE_KEYWORDS_RE.test(text);
+      renderContextModeNotice(showPage ? t("ctx_page_opening") : t("ctx_page_loading"));
       scrollToBottom();
-      const rootContent = await fetchUrlContent(detectedUrl);
+      const rootContent = await fetchUrlContent(detectedUrl, { active: showPage, keepOpen: showPage });
       if (rootContent) {
         if (rootContent.links && rootContent.links.length > 0) {
-          renderContextModeNotice("🔍 Relevante Unterseiten werden geladen…");
+          renderContextModeNotice(t("ctx_subpages_search"));
           scrollToBottom();
           const selectedUrls = await selectRelevantLinks(rootContent, rootContent.links, text);
           if (selectedUrls.length > 0) {
-            const subpages = (await Promise.all(selectedUrls.map(fetchUrlContent))).filter(Boolean);
+            const subpages = (await Promise.all(selectedUrls.map(u => fetchUrlContent(u)))).filter(Boolean);
             if (subpages.length > 0) {
               rootContent.text += "\n\n" + subpages
                 .map(p => `---\n${p.title}\n${p.url}\n${p.text}`)
@@ -1821,7 +1983,14 @@ async function sendMessage() {
             }
           }
         }
-        currentPageContext = { text: rootContent.text, title: rootContent.title, url: rootContent.url };
+        // Preserve links so the subpage-auto-fetch path below can run on
+        // follow-up turns within the same conversation.
+        currentPageContext = {
+          text: rootContent.text,
+          title: rootContent.title,
+          url: rootContent.url,
+          links: rootContent.links
+        };
         pageContextUsedInConversation = true;
       }
     }
@@ -1829,20 +1998,26 @@ async function sendMessage() {
 
     // ── Subpage Auto-Fetch ────────────────────────────────────
     if (!detectedUrl && currentPageContext?.links?.length > 0 && pageContextMode !== "off") {
-      const shouldLoad = await shouldLoadSubpages(text);
+      const showPage = SHOW_PAGE_KEYWORDS_RE.test(text);
+      const shouldLoad = showPage || await shouldLoadSubpages(text);
       if (shouldLoad) {
-        renderContextModeNotice("🔗 Unterseiten werden geladen…");
+        renderContextModeNotice(showPage ? t("ctx_subpage_opening") : t("ctx_subpages_loading"));
         scrollToBottom();
         const selectedUrls = await selectRelevantLinks(currentPageContext, currentPageContext.links, text);
         if (selectedUrls.length > 0) {
-          const subpages = (await Promise.all(selectedUrls.map(fetchUrlContent))).filter(Boolean);
+          const fetchOpts = showPage && selectedUrls.length === 1
+            ? { active: true, keepOpen: true }
+            : {};
+          const subpages = (await Promise.all(selectedUrls.map(u => fetchUrlContent(u, fetchOpts)))).filter(Boolean);
           if (subpages.length > 0) {
             const subText = subpages
               .map(p => `---\n${p.title}\n${p.url}\n${p.text.slice(0, 3000)}`)
               .join("\n\n");
             currentPageContext = { ...currentPageContext, text: currentPageContext.text + "\n\n" + subText };
             pageContextUsedInConversation = true;
-            renderContextModeNotice(`✅ ${subpages.length} Unterseite${subpages.length > 1 ? "n" : ""} geladen`);
+            renderContextModeNotice(showPage && selectedUrls.length === 1
+              ? t("ctx_page_opened", subpages[0].title)
+              : t("ctx_subpages_loaded", subpages.length, subpages.length > 1 ? t("ctx_subpage_plural") : ""));
             scrollToBottom();
           } else {
             renderContextModeNotice("");
@@ -1874,23 +2049,19 @@ async function sendMessage() {
       if (imageDataSnapshot) {
         typingEl.classList.add("hidden");
         typingEl.setAttribute("aria-hidden", "true");
-        fullResponse = "Bildübertragung wird von Gemini in diesem Modus noch nicht unterstützt.";
+        fullResponse = t("gemini_no_image");
         aiBubble = renderMessage("ai", fullResponse);
       } else {
         fullResponse = await callGemini(messages, includeCtx, null, abortController.signal);
         typingEl.classList.add("hidden");
         typingEl.setAttribute("aria-hidden", "true");
-        aiBubble = renderMessage("ai", fullResponse);
 
-        // Quick Replies — parse BEFORE KaTeX so re-setting innerHTML doesn't undo KaTeX
-        if (aiBubble && fullResponse) {
-          const { text: cleanGeminiText, replies: geminiReplies } = parseQuickReplies(fullResponse);
-          if (geminiReplies.length > 0) {
-            fullResponse = cleanGeminiText;
-            aiBubble.innerHTML = markdownToHtml(cleanGeminiText);
-            aiBubble._rawText = cleanGeminiText;
-            renderQuickReplies(geminiReplies, aiBubble.closest(".message-row"));
-          }
+        // Quick Replies — parse BEFORE first render so markdown only runs once
+        const { text: cleanGeminiText, replies: geminiReplies } = parseQuickReplies(fullResponse);
+        if (geminiReplies.length > 0) fullResponse = cleanGeminiText;
+        aiBubble = renderMessage("ai", fullResponse);
+        if (geminiReplies.length > 0) {
+          renderQuickReplies(geminiReplies, aiBubble.closest(".message-row"));
         }
         renderKatex(aiBubble);
         highlightCode(aiBubble);
@@ -1913,10 +2084,9 @@ async function sendMessage() {
         flusher.schedule();
       }
       flusher.finalize();
-      requestAnimationFrame(() => renderKatex(aiBubble));
-      requestAnimationFrame(() => highlightCode(aiBubble));
 
-      // Quick Replies — parse from full response, strip marker from displayed bubble
+      // Quick Replies — parse from full response, strip marker BEFORE
+      // re-rendering so markdownToHtml only runs once over cleanText
       if (aiBubble && fullResponse) {
         const { text: cleanText, replies } = parseQuickReplies(fullResponse);
         if (replies.length > 0) {
@@ -1926,6 +2096,9 @@ async function sendMessage() {
           renderQuickReplies(replies, aiBubble.closest(".message-row"));
         }
       }
+
+      requestAnimationFrame(() => renderKatex(aiBubble));
+      requestAnimationFrame(() => highlightCode(aiBubble));
     }
 
     const historyBeforeFirstReply = [...chatHistory]; // snapshot before first reply
@@ -1940,14 +2113,33 @@ async function sendMessage() {
       history: historyBeforeFirstReply,
       text,
       includeCtx,
-      fullResponse
+      fullResponse,
+      convIdAtSend: activeConvId
     };
 
   } catch (err) {
     typingEl.classList.add("hidden");
     typingEl.setAttribute("aria-hidden", "true");
     if (err.name !== "AbortError") {
-      renderMessage("ai", `Fehler: ${err.message}`);
+      const errBubble = renderMessage("ai", err.message);
+      const isAuthError = err.message.includes("ungültig") || err.message.includes("invalid")
+        || err.message.includes("Einstellungen") || err.message.includes("settings")
+        || err.message.includes("Rechte") || err.message.includes("permissions");
+      if (!isAuthError) {
+        const retryBtn = document.createElement("button");
+        retryBtn.className = "quick-reply-btn";
+        retryBtn.textContent = t("retry_btn");
+        retryBtn.addEventListener("click", () => {
+          retryBtn.closest(".quick-replies")?.remove();
+          const input = document.getElementById("user-input");
+          input.value = text;
+          sendMessage();
+        });
+        const retryContainer = document.createElement("div");
+        retryContainer.className = "quick-replies";
+        retryContainer.appendChild(retryBtn);
+        errBubble.closest(".message-row").insertAdjacentElement("afterend", retryContainer);
+      }
     }
     // On abort: save partial response if we have one
     if (err.name === "AbortError" && aiBubble && fullResponse) {
@@ -2021,6 +2213,7 @@ function onProviderChange() {
 }
 
 async function clearHistory() {
+  if (isStreaming) return;
   chatHistory = [];
   lastDisplayedModel = null;
   document.getElementById("messages").innerHTML = "";
@@ -2037,11 +2230,31 @@ async function clearHistory() {
 
 async function exportConversations() {
   const index = await loadConversationsIndex();
-  const conversations = [];
-  for (const entry of index) {
-    const messages = await loadConversation(entry.id);
-    conversations.push({ ...entry, messages });
+  if (index.length === 0) {
+    const blob = new Blob([JSON.stringify({ version: 1, exportedAt: Date.now(), conversations: [] }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const today = new Date().toISOString().slice(0, 10);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ai-agent-export-${today}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return;
   }
+  // Bulk-fetch all conv_<id> keys in a single storage roundtrip — saves
+  // (N-1) IPC hops compared to looping loadConversation.
+  const keys = index.map(e => `conv_${e.id}`);
+  const stored = await browser.storage.local.get(keys);
+  const conversations = index.map(entry => {
+    const raw = Array.isArray(stored[`conv_${entry.id}`]) ? stored[`conv_${entry.id}`] : [];
+    const messages = raw
+      .filter(m => m && (m.role === "user" || m.role === "assistant"))
+      .map(m => {
+        const content = typeof m.content === "string" ? m.content : String(m.content ?? "");
+        return { ...m, content: content.length > 10000 ? content.slice(0, 10000) + "…" : content };
+      });
+    return { ...entry, messages };
+  });
   const payload = { version: 1, exportedAt: Date.now(), conversations };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -2060,11 +2273,11 @@ async function importConversations(file) {
   try {
     payload = JSON.parse(text);
   } catch {
-    alert("Ungültige Datei – kein valides JSON.");
+    alert(t("import_json_error"));
     return;
   }
   if (!payload?.conversations || !Array.isArray(payload.conversations)) {
-    alert("Ungültiges Format.");
+    alert(t("import_format_error"));
     return;
   }
 
@@ -2078,7 +2291,7 @@ async function importConversations(file) {
     await saveConversation(conv.id, conv.messages);
     existingIndex.unshift({
       id: conv.id,
-      title: conv.title || "Importierte Unterhaltung",
+      title: conv.title || t("imported_conv_title"),
       updatedAt: conv.updatedAt || Date.now(),
       ...(conv.pinned ? { pinned: true } : {})
     });
@@ -2101,10 +2314,12 @@ async function importConversations(file) {
   }
   await saveConversationsIndex([...pinnedEntries, ...unpinnedEntries]);
 
-  alert(`${imported} Unterhaltung${imported !== 1 ? "en" : ""} importiert.`);
+  const suffix = imported !== 1 ? t("import_plural_suffix") : "";
+  alert(t("import_success", imported, suffix));
 }
 
 async function startNewConversation() {
+  if (isStreaming) return;
   if (chatHistory.length === 0) return; // guard: don't create empty conv
   clearPendingImage();
 
@@ -2121,13 +2336,30 @@ async function startNewConversation() {
 
 function refreshModels() {
   const providerId = document.getElementById("provider-select").value;
+  // Manual refresh button → drop cache entry so fetch is forced.
+  modelsCache.delete(modelsCacheKey(providerId));
   populateModelDropdown(providerId);
 }
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
-  const aiConfig = await loadAIConfig();
-  settings = await loadSettings();
+  // Single batch read of every storage key the cold-open path needs.
+  // 8 separate awaits → 1 IPC roundtrip; saves ~30-90ms on Safari popups.
+  const [aiConfig, storedSettings, batch] = await Promise.all([
+    loadAIConfig(),
+    loadSettings(),
+    browser.storage.local.get([
+      "pageContextMode",
+      "active_conv_id",
+      "conversations_index",
+      "darkMode",
+      "contextMenuPrompt",
+      "chatHistory"
+    ])
+  ]);
+
+  settings = storedSettings;
+  setLanguage(settings.language || "de");
 
   // Auto-detected Werte überschreiben manuelle (auto hat Vorrang)
   if (aiConfig.autoDetected) {
@@ -2140,16 +2372,24 @@ async function init() {
   // Badge-Status in UI-State merken
   settings._autoDetected = aiConfig.autoDetected;
 
-  const stored = await browser.storage.local.get(["pageContextMode"]);
   const validModes = ["auto", "on", "off"];
-  pageContextMode = validModes.includes(stored.pageContextMode) ? stored.pageContextMode : "auto";
+  pageContextMode = validModes.includes(batch.pageContextMode) ? batch.pageContextMode : "auto";
   updatePageCtrlUI();
-  await migrateOldChatHistory();
 
-  const storedId = await browser.storage.local.get(["active_conv_id"]);
-  const index = await loadConversationsIndex();
+  // Migrate old chatHistory key only if present and no new index exists yet.
+  // Reads/writes are kept in migrateOldChatHistory itself; we just decide
+  // here whether to call it based on the batched values.
+  let convId = batch.active_conv_id;
+  let index = Array.isArray(batch.conversations_index) ? batch.conversations_index : [];
 
-  let convId = storedId.active_conv_id;
+  if (batch.chatHistory && !batch.conversations_index) {
+    await migrateOldChatHistory();
+    // Re-read post-migration values (cheap — single roundtrip)
+    const post = await browser.storage.local.get(["active_conv_id", "conversations_index"]);
+    convId = post.active_conv_id;
+    index = Array.isArray(post.conversations_index) ? post.conversations_index : [];
+  }
+
   // Validate that active ID still exists in index
   if (!convId || !index.find(c => c.id === convId)) {
     convId = generateConvId();
@@ -2160,9 +2400,9 @@ async function init() {
 
   chatHistory = await loadConversation(activeConvId);
   applyTheme(settings.provider, settings.model);
-  const dmResult = await browser.storage.local.get(["darkMode"]);
+  applyTranslations();
   const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
-  applyDarkMode(dmResult.darkMode !== undefined ? dmResult.darkMode === true : prefersDark);
+  applyDarkMode(batch.darkMode !== undefined ? batch.darkMode === true : prefersDark);
 
   if (chatHistory.length === 0) {
     renderEmptyState();
@@ -2263,17 +2503,23 @@ async function init() {
     updatePageCtrlUI();
     await browser.storage.local.set({ pageContextMode });
 
-    const MODE_LABELS = { auto: "Seitenkontext: Auto", on: "Seitenkontext: Seite", off: "Seitenkontext: Aus" };
+    const MODE_LABELS = { auto: t("ctx_mode_auto"), on: t("ctx_mode_on"), off: t("ctx_mode_off") };
     renderContextModeNotice(MODE_LABELS[pageContextMode] ?? pageContextMode);
   });
 
   const debouncedRefetchModels = debounce(() => {
     const providerId = document.getElementById("provider-select").value;
     populateModelDropdown(providerId);
-  }, 300);
+  }, 500);
 
+  // base-url: re-fetch on every keystroke (debounced) — typical change is paste
   document.getElementById("base-url-input").addEventListener("input", debouncedRefetchModels);
-  document.getElementById("api-key-input").addEventListener("input", debouncedRefetchModels);
+  // api-key: only on commit (blur) so intermediate partial keys don't trigger
+  // 401-storms. Use `change` instead of `input` for that.
+  document.getElementById("api-key-input").addEventListener("change", () => {
+    const providerId = document.getElementById("provider-select").value;
+    populateModelDropdown(providerId);
+  });
 
   document.getElementById("history-search").addEventListener("input", (e) => {
     filterHistoryItems(e.target.value);
@@ -2286,11 +2532,10 @@ async function init() {
     }
   });
 
-  // Check if launched via context menu
-  const cmResult = await browser.storage.local.get(["contextMenuPrompt"]);
-  if (cmResult.contextMenuPrompt) {
+  // Check if launched via context menu — use value from initial batch read
+  if (batch.contextMenuPrompt) {
     await browser.storage.local.remove("contextMenuPrompt");
-    document.getElementById("user-input").value = cmResult.contextMenuPrompt;
+    document.getElementById("user-input").value = batch.contextMenuPrompt;
     document.getElementById("send-btn").disabled = false;
     document.getElementById("user-input").focus();
   }
@@ -2357,7 +2602,7 @@ async function startAgentLoop() {
   try {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
     const tabId = tabs?.[0]?.id;
-    if (tabId == null) { agentLog("error", "Kein aktiver Tab gefunden."); setAgentRunning(false); return; }
+    if (tabId == null) { agentLog("error", t("agent_no_tab")); setAgentRunning(false); return; }
 
     const response = await browser.runtime.sendMessage({
       type: "AGENT_START",
@@ -2370,7 +2615,7 @@ async function startAgentLoop() {
     });
 
     if (!response?.ok) {
-      agentLog("error", response?.error ?? "Konnte Agent nicht starten.");
+      agentLog("error", response?.error ?? t("agent_start_fail"));
       setAgentRunning(false);
     }
   } catch (e) {
@@ -2404,7 +2649,7 @@ function initAgentTab() {
     if (msg.type === "AGENT_LOG") { agentLog(msg.status, msg.text); return; }
     if (msg.type === "AGENT_DONE") { setAgentRunning(false); return; }
     if (msg.type === "AGENT_CONFIRM_REQUEST") {
-      document.getElementById("agent-confirm-text").textContent = `Bestätigen: ${msg.actionText ?? ""}`;
+      document.getElementById("agent-confirm-text").textContent = t("confirm_prefix", msg.actionText ?? "");
       document.getElementById("agent-confirm-bar").classList.remove("hidden");
     }
   });
