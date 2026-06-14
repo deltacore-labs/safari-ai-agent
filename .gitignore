@@ -18,5 +18,4 @@ DerivedData/
 claude/
 opencode.ai/
 
-# Docs (optional — remove if you want to track these)
-docs/superpowers/
+# Docs — tracked in git
