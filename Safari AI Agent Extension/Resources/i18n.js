@@ -88,7 +88,7 @@ const TRANSLATIONS = {
     imported_conv_title: "Importierte Unterhaltung",
     // Agent section
     agent_section_label: "Agent",
-    agent_placeholder: "Aufgabe beschreiben, z.B. „Melde mich mit user@example.com an"",
+    agent_placeholder: "Aufgabe beschreiben, z.B. „Melde mich mit user@example.com an“",
     agent_start_btn: "Starten",
     agent_stop_btn: "Stop",
     agent_confirm_btn_yes: "Ausführen",
@@ -186,6 +186,19 @@ const TRANSLATIONS = {
     prompt_explain: "Erkläre mir bitte Folgendes kurz und verständlich:\n\n\"%1\"",
     prompt_translate: "Übersetze den folgenden Text auf Deutsch:\n\n\"%1\"",
     prompt_summarize: "Fasse den folgenden Text in 2-3 Sätzen zusammen:\n\n\"%1\"",
+    // Welcome onboarding
+    welcome_step1_title: "Willkommen bei AI Agent",
+    welcome_step1_desc: "Dein KI-Assistent direkt im Safari-Browser. Stelle Fragen, lass Seiten erklären oder erledige Aufgaben automatisch.",
+    welcome_step2_title: "Seitenkontext",
+    welcome_step2_desc: "Ich lese die aktuelle Seite mit und kann sie zusammenfassen, übersetzen oder als Kontext für deine Frage nutzen.",
+    welcome_step3_title: "Web-Agent",
+    welcome_step3_desc: "Beschreib eine Aufgabe — ich klicke, tippe und navigiere für dich. Formulare ausfüllen, Seiten durchsuchen, Aktionen ausführen.",
+    welcome_step4_title: "Einrichten",
+    welcome_step4_desc: "Verbinde deinen API-Key von Anthropic, OpenAI, Gemini — oder nutze ein lokales Modell via Ollama.",
+    welcome_btn_next: "Weiter",
+    welcome_btn_skip: "Überspringen",
+    welcome_btn_setup: "Einstellungen öffnen",
+    welcome_btn_later: "Später einrichten",
   },
   en: {
     // Settings panel
@@ -339,5 +352,18 @@ const TRANSLATIONS = {
     prompt_explain: "Please explain the following briefly and clearly:\n\n\"%1\"",
     prompt_translate: "Translate the following text to English:\n\n\"%1\"",
     prompt_summarize: "Summarize the following text in 2-3 sentences:\n\n\"%1\"",
+    // Welcome onboarding
+    welcome_step1_title: "Welcome to AI Agent",
+    welcome_step1_desc: "Your AI assistant directly in Safari. Ask questions, get pages explained, or automate tasks.",
+    welcome_step2_title: "Page Context",
+    welcome_step2_desc: "I read the current page and can summarise, translate, or use it as context for your questions.",
+    welcome_step3_title: "Web Agent",
+    welcome_step3_desc: "Describe a task — I click, type, and navigate for you. Fill forms, search pages, execute actions.",
+    welcome_step4_title: "Set Up",
+    welcome_step4_desc: "Connect your API key from Anthropic, OpenAI, Gemini — or use a local model via Ollama.",
+    welcome_btn_next: "Next",
+    welcome_btn_skip: "Skip",
+    welcome_btn_setup: "Open Settings",
+    welcome_btn_later: "Set up later",
   }
 };
