@@ -265,6 +265,50 @@
       </div>
     </div>
 
+    <!-- WELCOME OVERLAY -->
+    <div id="welcome-overlay" class="welcome-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+      <div class="welcome-sheet">
+
+        <div class="welcome-dots" aria-hidden="true">
+          <span class="welcome-dot active" data-step="0"></span>
+          <span class="welcome-dot" data-step="1"></span>
+          <span class="welcome-dot" data-step="2"></span>
+          <span class="welcome-dot" data-step="3"></span>
+        </div>
+
+        <!-- Step 0 -->
+        <div class="welcome-step" data-step="0">
+          <div class="welcome-icon">👋</div>
+          <h2 id="welcome-title" class="welcome-step-title" data-i18n="welcome_step1_title">Willkommen bei AI Agent</h2>
+          <p class="welcome-step-desc" data-i18n="welcome_step1_desc">Dein KI-Assistent direkt im Safari-Browser.</p>
+        </div>
+
+        <!-- Step 1 -->
+        <div class="welcome-step hidden" data-step="1">
+          <div class="welcome-icon">🌐</div>
+          <h2 class="welcome-step-title" data-i18n="welcome_step2_title">Seitenkontext</h2>
+          <p class="welcome-step-desc" data-i18n="welcome_step2_desc">Ich lese die aktuelle Seite mit…</p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="welcome-step hidden" data-step="2">
+          <div class="welcome-icon">🤖</div>
+          <h2 class="welcome-step-title" data-i18n="welcome_step3_title">Web-Agent</h2>
+          <p class="welcome-step-desc" data-i18n="welcome_step3_desc">Beschreib eine Aufgabe…</p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="welcome-step hidden" data-step="3">
+          <div class="welcome-icon">⚙️</div>
+          <h2 class="welcome-step-title" data-i18n="welcome_step4_title">Einrichten</h2>
+          <p class="welcome-step-desc" data-i18n="welcome_step4_desc">Verbinde deinen API-Key…</p>
+        </div>
+
+        <button id="welcome-next-btn" class="welcome-btn-next" data-i18n="welcome_btn_next">Weiter</button>
+        <button id="welcome-skip-btn" class="welcome-btn-skip" data-i18n="welcome_btn_skip">Überspringen</button>
+
+      </div>
+    </div>
 
   </div>
   <script src="katex/katex.min.js" defer></script>
