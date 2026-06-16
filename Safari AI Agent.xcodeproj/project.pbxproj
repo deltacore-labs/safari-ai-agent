@@ -37,6 +37,7 @@
 /* Begin PBXFileReference section */
 		399652E82FD7F70300D04BBB /* Safari AI Agent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Safari AI Agent.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		399653022FD7F70500D04BBB /* Safari AI Agent Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Safari AI Agent Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */

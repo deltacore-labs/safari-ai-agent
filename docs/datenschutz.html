@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Datenschutzerklärung — AskSafari</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+</head>
+<body>
+<div class="page">
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">Ask<span>Safari</span></a>
+      <div class="nav-right">
+        <button class="lang-toggle" id="langToggle" aria-label="Sprache wechseln">
+          <span class="lang-option" data-lang="de">DE</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-option" data-lang="en">EN</span>
+        </button>
+        <a href="#" class="appstore-badge nav-badge" aria-label="Im Mac App Store laden">
+          <img id="navBadge"
+               src="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg"
+               alt="Laden im Mac App Store" height="36">
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="container">
+    <div class="legal-content">
+      <h1 id="page-title">Datenschutzerklärung</h1>
+
+      <h2 id="section1-heading">1. Verantwortlicher</h2>
+      <address>
+        Stefan Friedrich<br>
+        Seckenheimer Landstraße 4A / 138<br>
+        68163 Mannheim<br>
+        E-Mail: <a href="mailto:delta.corelabs@gmail.com">delta.corelabs@gmail.com</a>
+      </address>
+
+      <h2 id="section2-heading">2. Erhebung und Verarbeitung personenbezogener Daten</h2>
+      <p id="section2-text">
+        Diese Website erhebt keine personenbezogenen Daten, setzt keine Cookies ein
+        und verwendet keinerlei Tracking- oder Analyse-Tools.
+      </p>
+
+      <h2 id="section3-heading">3. Hosting über GitHub Pages</h2>
+      <p id="section3-text1">
+        Diese Website wird über GitHub Pages gehostet (GitHub Inc., 88 Colin P Kelly Jr St,
+        San Francisco, CA 94107, USA). Beim Aufruf der Website werden technische Daten
+        (insbesondere IP-Adresse, Datum und Uhrzeit des Zugriffs) durch die Server von
+        GitHub verarbeitet. Dies geschieht auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO
+        (berechtigtes Interesse an der sicheren Bereitstellung der Website).
+      </p>
+      <p id="section3-text2">
+        Weitere Informationen zum Datenschutz bei GitHub finden Sie unter:<br>
+        <a href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement" target="_blank" rel="noopener">
+          https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement
+        </a>
+      </p>
+
+      <h2 id="section4-heading">4. AskSafari Browser-Extension</h2>
+      <p id="section4-text1">
+        Die AskSafari-Extension speichert API-Keys, Einstellungen und Gesprächsverläufe
+        ausschließlich lokal im Browser-Speicher von Safari (Safari Extension Storage).
+        Es werden keine Daten an eigene Server übertragen.
+      </p>
+      <p id="section4-text2">
+        API-Anfragen werden direkt vom Browser des Nutzers an den jeweiligen KI-Anbieter
+        gesendet (Anthropic für Claude, Google für Gemini, bzw. lokal an Ollama).
+        Dabei gelten die Datenschutzbestimmungen des jeweiligen Anbieters.
+        Bei Nutzung von Ollama verlassen keine Daten das lokale Gerät.
+      </p>
+
+      <h2 id="section5-heading">5. Ihre Rechte</h2>
+      <p id="section5-text1">
+        Sie haben das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16 DSGVO),
+        Löschung (Art. 17 DSGVO), Einschränkung der Verarbeitung (Art. 18 DSGVO) sowie
+        das Recht auf Datenübertragbarkeit (Art. 20 DSGVO).
+      </p>
+      <p id="section5-text2">
+        Da diese Website und die Extension keine personenbezogenen Daten erheben oder
+        speichern, liegen in der Regel keine verarbeitungsfähigen Daten vor.
+        Für Anfragen wenden Sie sich an:
+        <a href="mailto:delta.corelabs@gmail.com">delta.corelabs@gmail.com</a>
+      </p>
+
+      <h2 id="section6-heading">6. Beschwerderecht</h2>
+      <p id="section6-text">
+        Sie haben das Recht, sich bei der zuständigen Aufsichtsbehörde zu beschweren.
+        Zuständig ist der Landesbeauftragte für den Datenschutz und die
+        Informationsfreiheit Baden-Württemberg:
+        <a href="https://www.baden-wuerttemberg.datenschutz.de" target="_blank" rel="noopener">
+          www.baden-wuerttemberg.datenschutz.de
+        </a>
+      </p>
+
+      <p style="margin-top:48px;" class="label" id="date-note">Stand: Juni 2026</p>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <ul class="footer-links">
+        <li><a href="impressum.html" id="footer-impressum">Impressum</a></li>
+        <li><a href="datenschutz.html" id="footer-datenschutz">Datenschutz</a></li>
+        <li><a href="https://github.com/deltacore-labs/safari-ai-agent">GitHub</a></li>
+      </ul>
+      <span class="footer-copy">© 2026 deltacore labs</span>
+    </div>
+  </footer>
+
+</div>
+<script>
+  const i18n = {
+    de: {
+      lang: 'de',
+      navBadgeSrc: 'App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg',
+      navBadgeAlt: 'Laden im Mac App Store',
+      navBadgeAria: 'Im Mac App Store laden',
+      pageTitle: 'Datenschutzerklärung — AskSafari',
+      'page-title': 'Datenschutzerklärung',
+      'section1-heading': '1. Verantwortlicher',
+      'section2-heading': '2. Erhebung und Verarbeitung personenbezogener Daten',
+      'section2-text': 'Diese Website erhebt keine personenbezogenen Daten, setzt keine Cookies ein und verwendet keinerlei Tracking- oder Analyse-Tools.',
+      'section3-heading': '3. Hosting über GitHub Pages',
+      'section3-text1': 'Diese Website wird über GitHub Pages gehostet (GitHub Inc., 88 Colin P Kelly Jr St, San Francisco, CA 94107, USA). Beim Aufruf der Website werden technische Daten (insbesondere IP-Adresse, Datum und Uhrzeit des Zugriffs) durch die Server von GitHub verarbeitet. Dies geschieht auf Grundlage von Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an der sicheren Bereitstellung der Website).',
+      'section4-heading': '4. AskSafari Browser-Extension',
+      'section4-text1': 'Die AskSafari-Extension speichert API-Keys, Einstellungen und Gesprächsverläufe ausschließlich lokal im Browser-Speicher von Safari (Safari Extension Storage). Es werden keine Daten an eigene Server übertragen.',
+      'section5-heading': '5. Ihre Rechte',
+      'section6-heading': '6. Beschwerderecht',
+      'date-note': 'Stand: Juni 2026',
+      'footer-impressum': 'Impressum',
+      'footer-datenschutz': 'Datenschutz',
+    },
+    en: {
+      lang: 'en',
+      navBadgeSrc: 'App Store Badges/en/Download_on_the_Mac_App_Store_Badge_US-UK_RGB_wht_092917.svg',
+      navBadgeAlt: 'Download on the Mac App Store',
+      navBadgeAria: 'Download on the Mac App Store',
+      pageTitle: 'Privacy Policy — AskSafari',
+      'page-title': 'Privacy Policy',
+      'section1-heading': '1. Controller',
+      'section2-heading': '2. Collection and Processing of Personal Data',
+      'section2-text': 'This website does not collect personal data, does not use cookies, and does not use any tracking or analytics tools.',
+      'section3-heading': '3. Hosting via GitHub Pages',
+      'section3-text1': 'This website is hosted via GitHub Pages (GitHub Inc., 88 Colin P Kelly Jr St, San Francisco, CA 94107, USA). When accessing the website, technical data (in particular IP address, date and time of access) is processed by GitHub\'s servers. This is done on the basis of Art. 6(1)(f) GDPR (legitimate interest in the secure provision of the website).',
+      'section4-heading': '4. AskSafari Browser Extension',
+      'section4-text1': 'The AskSafari extension stores API keys, settings and chat histories exclusively in Safari\'s local browser storage (Safari Extension Storage). No data is transmitted to any server.',
+      'section5-heading': '5. Your Rights',
+      'section6-heading': '6. Right to Lodge a Complaint',
+      'date-note': 'As of: June 2026',
+      'footer-impressum': 'Legal Notice',
+      'footer-datenschutz': 'Privacy Policy',
+    }
+  };
+
+  const toggle = document.getElementById('langToggle');
+  let lang = localStorage.getItem('site-lang') || 'de';
+
+  function applyLang(l) {
+    lang = l;
+    localStorage.setItem('site-lang', l);
+    const t = i18n[l];
+    document.documentElement.lang = t.lang;
+    document.title = t.pageTitle;
+
+    const badge = document.getElementById('navBadge');
+    badge.src = t.navBadgeSrc;
+    badge.alt = t.navBadgeAlt;
+    badge.parentElement.setAttribute('aria-label', t.navBadgeAria);
+
+    ['page-title','section1-heading','section2-heading','section2-text',
+     'section3-heading','section3-text1','section4-heading','section4-text1',
+     'section5-heading','section6-heading','date-note',
+     'footer-impressum','footer-datenschutz'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && t[id]) el.textContent = t[id];
+    });
+
+    toggle.querySelectorAll('.lang-option').forEach(opt => {
+      opt.classList.toggle('lang-active', opt.dataset.lang === l);
+    });
+  }
+
+  toggle.addEventListener('click', () => applyLang(lang === 'de' ? 'en' : 'de'));
+  applyLang(lang);
+</script>
+</body>
+</html>

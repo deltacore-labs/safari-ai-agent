@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Impressum — AskSafari</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+</head>
+<body>
+<div class="page">
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="container nav-inner">
+      <a href="index.html" class="nav-logo">Ask<span>Safari</span></a>
+      <div class="nav-right">
+        <button class="lang-toggle" id="langToggle" aria-label="Sprache wechseln">
+          <span class="lang-option" data-lang="de">DE</span>
+          <span class="lang-sep">/</span>
+          <span class="lang-option" data-lang="en">EN</span>
+        </button>
+        <a href="#" class="appstore-badge nav-badge" aria-label="Im Mac App Store laden">
+          <img id="navBadge"
+               src="App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg"
+               alt="Laden im Mac App Store" height="36">
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- CONTENT -->
+  <main class="container">
+    <div class="legal-content">
+      <h1 id="page-title">Impressum</h1>
+
+      <h2 id="section1-heading">Angaben gemäß § 5 TMG</h2>
+      <address>
+        Stefan Friedrich<br>
+        Seckenheimer Landstraße 4A / 138<br>
+        68163 Mannheim<br>
+        Deutschland
+      </address>
+
+      <h2 id="section2-heading">Kontakt</h2>
+      <p>E-Mail: <a href="mailto:delta.corelabs@gmail.com">delta.corelabs@gmail.com</a></p>
+
+      <h2 id="section3-heading">Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
+      <address>
+        Stefan Friedrich<br>
+        Seckenheimer Landstraße 4A / 138<br>
+        68163 Mannheim<br>
+        Deutschland
+      </address>
+
+      <h2 id="section4-heading">Haftungsausschluss</h2>
+      <p id="section4-text">
+        Die Inhalte dieser Website wurden mit größtmöglicher Sorgfalt erstellt.
+        Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte kann jedoch keine Gewähr übernommen werden.
+      </p>
+
+      <h2 id="section5-heading">Externe Links</h2>
+      <p id="section5-text">
+        Diese Website enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen Einfluss haben.
+        Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter oder Betreiber verantwortlich.
+      </p>
+    </div>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <ul class="footer-links">
+        <li><a href="impressum.html" id="footer-impressum">Impressum</a></li>
+        <li><a href="datenschutz.html" id="footer-datenschutz">Datenschutz</a></li>
+        <li><a href="https://github.com/deltacore-labs/safari-ai-agent">GitHub</a></li>
+      </ul>
+      <span class="footer-copy">© 2026 deltacore labs</span>
+    </div>
+  </footer>
+
+</div>
+<script>
+  const i18n = {
+    de: {
+      lang: 'de',
+      navBadgeSrc: 'App Store Badges/de/Download_on_the_Mac_App_Store_Badge_DE_RGB_wht_092917.svg',
+      navBadgeAlt: 'Laden im Mac App Store',
+      navBadgeAria: 'Im Mac App Store laden',
+      pageTitle: 'Impressum — AskSafari',
+      'page-title': 'Impressum',
+      'section1-heading': 'Angaben gemäß § 5 TMG',
+      'section2-heading': 'Kontakt',
+      'section3-heading': 'Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV',
+      'section4-heading': 'Haftungsausschluss',
+      'section4-text': 'Die Inhalte dieser Website wurden mit größtmöglicher Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte kann jedoch keine Gewähr übernommen werden.',
+      'section5-heading': 'Externe Links',
+      'section5-text': 'Diese Website enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen Einfluss haben. Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter oder Betreiber verantwortlich.',
+      'footer-impressum': 'Impressum',
+      'footer-datenschutz': 'Datenschutz',
+    },
+    en: {
+      lang: 'en',
+      navBadgeSrc: 'App Store Badges/en/Download_on_the_Mac_App_Store_Badge_US-UK_RGB_wht_092917.svg',
+      navBadgeAlt: 'Download on the Mac App Store',
+      navBadgeAria: 'Download on the Mac App Store',
+      pageTitle: 'Legal Notice — AskSafari',
+      'page-title': 'Legal Notice',
+      'section1-heading': 'Information according to § 5 TMG',
+      'section2-heading': 'Contact',
+      'section3-heading': 'Responsible for content pursuant to § 18 para. 2 MStV',
+      'section4-heading': 'Disclaimer',
+      'section4-text': 'The content of this website was created with the utmost care. However, no guarantee can be given for the accuracy, completeness or timeliness of the content.',
+      'section5-heading': 'External Links',
+      'section5-text': 'This website contains links to external third-party websites over whose content we have no influence. The respective provider or operator is always responsible for the content of linked pages.',
+      'footer-impressum': 'Legal Notice',
+      'footer-datenschutz': 'Privacy Policy',
+    }
+  };
+
+  const toggle = document.getElementById('langToggle');
+  let lang = localStorage.getItem('site-lang') || 'de';
+
+  function applyLang(l) {
+    lang = l;
+    localStorage.setItem('site-lang', l);
+    const t = i18n[l];
+    document.documentElement.lang = t.lang;
+    document.title = t.pageTitle;
+
+    const badge = document.getElementById('navBadge');
+    badge.src = t.navBadgeSrc;
+    badge.alt = t.navBadgeAlt;
+    badge.parentElement.setAttribute('aria-label', t.navBadgeAria);
+
+    ['page-title','section1-heading','section2-heading','section3-heading',
+     'section4-heading','section4-text','section5-heading','section5-text',
+     'footer-impressum','footer-datenschutz'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el && t[id]) el.textContent = t[id];
+    });
+
+    toggle.querySelectorAll('.lang-option').forEach(opt => {
+      opt.classList.toggle('lang-active', opt.dataset.lang === l);
+    });
+  }
+
+  toggle.addEventListener('click', () => applyLang(lang === 'de' ? 'en' : 'de'));
+  applyLang(lang);
+</script>
+</body>
+</html>
