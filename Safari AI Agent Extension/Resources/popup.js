@@ -69,6 +69,7 @@ let pageContextUsedInConversation = false;
 let lastDisplayedModel = null;
 let pendingImageData = null; // { base64: string, mimeType: string } | null
 let agentRunning = false;
+let welcomeStep = 0;
 
 // ── Storage Helpers ───────────────────────────────────────────
 async function loadSettings() {
@@ -2165,6 +2166,52 @@ async function sendMessage() {
   }
 }
 
+// ── Welcome Onboarding ────────────────────────────────────────
+async function checkWelcome() {
+  const { welcome_seen } = await browser.storage.local.get("welcome_seen");
+  if (!welcome_seen) showWelcomeOverlay();
+}
+
+function showWelcomeOverlay() {
+  welcomeStep = 0;
+  const overlay = document.getElementById("welcome-overlay");
+  overlay.classList.remove("hidden");
+  showWelcomeStep(0);
+  applyTranslations(overlay);
+}
+
+function showWelcomeStep(n) {
+  welcomeStep = n;
+  document.querySelectorAll(".welcome-step").forEach((el, i) => {
+    el.classList.toggle("hidden", i !== n);
+  });
+  document.querySelectorAll(".welcome-dot").forEach((el, i) => {
+    el.classList.toggle("active", i === n);
+  });
+  const nextBtn = document.getElementById("welcome-next-btn");
+  const isLast = n === 3;
+  nextBtn.classList.toggle("setup", isLast);
+  nextBtn.dataset.i18n = isLast ? "welcome_btn_setup" : "welcome_btn_next";
+  nextBtn.textContent = t(nextBtn.dataset.i18n);
+  const skipBtn = document.getElementById("welcome-skip-btn");
+  skipBtn.dataset.i18n = isLast ? "welcome_btn_later" : "welcome_btn_skip";
+  skipBtn.textContent = t(skipBtn.dataset.i18n);
+}
+
+function advanceWelcome() {
+  if (welcomeStep < 3) {
+    showWelcomeStep(welcomeStep + 1);
+  } else {
+    dismissWelcome(true);
+  }
+}
+
+async function dismissWelcome(openSettingsAfter = false) {
+  await browser.storage.local.set({ welcome_seen: true });
+  document.getElementById("welcome-overlay").classList.add("hidden");
+  if (openSettingsAfter) openSettings();
+}
+
 // ── Panel Navigation ──────────────────────────────────────────
 function openSettings() {
   closeHistoryDropdown();
@@ -2549,6 +2596,9 @@ async function init() {
     }
   });
   initAgentTab();
+  document.getElementById("welcome-next-btn").addEventListener("click", advanceWelcome);
+  document.getElementById("welcome-skip-btn").addEventListener("click", () => dismissWelcome(false));
+  await checkWelcome();
 }
 
 // ── Agent Section ─────────────────────────────────────────────
